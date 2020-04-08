@@ -62,10 +62,22 @@ or
 https://gist.github.com/rochacbruno/2883505
 """
 
+#Alerts - put logic here
+def AlertOne():
+  print("alert 1 triggered!")
+  
+def AlertTwo():
+  print("alert 2 triggered!")
+  
+def AlertThree():
+  print("alert 3 triggered!")
+
+  
 # Check if an alert has been triggered against the remaining time in minutes
 def CheckalertTimes(seconds):
   minutes = seconds/60
   minutes = int(minutes)
+  minutes -= 159
   
   global alertOneTriggered
   global alertTwoTriggered
@@ -76,14 +88,17 @@ def CheckalertTimes(seconds):
       if alertOneTriggered is False:
         alertOneTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [ ]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
+        AlertOne()
   elif minutes <= alertTwo and minutes > alertThree:
       if alertTwoTriggered is False:
         alertTwoTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
+        AlertTwo()
   elif minutes <= alertThree:
       if alertThreeTriggered is False:
         alertThreeTriggered = True
-        alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in " + str(minutes*60) + " seconds, hold your butts!".format(one=alertOne, two=alertTwo, three=alertThree)
+        alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in ".format(one=alertOne, two=alertTwo, three=alertThree) + str(minutes*60) + " seconds"
+        AlertThree()
   else:
      alertOneTriggered = False
      alertTwoTriggered = False
@@ -94,16 +109,15 @@ def CheckalertTimes(seconds):
 # Display progress on LCD(16)
 def ShowLCD(tLeft, dur):
   value = int(tLeft / 60) # convert time to minutes
-  #value -= 183 # Use this to create an offset in minutes to test the data (if 20 mins are left, value -= 4 = 16 mins left)
+  value -= 159 # Use this to create an offset in minutes to test the data (if 20 mins are left, value -= 4 = 16 mins left)
   if 16 >= value: # if each chararacter on the LCD is 1, if there is less than 16 minutes left, show updates
-    print(str(value))
     LCDDisplay = "================" # number of characters match LCD
     invertValue = 16 - value
     LCDDisplay = LCDDisplay[:invertValue] + "0" + LCDDisplay[invertValue+1:]
     print (str(LCDDisplay))
 
   if value == 0: # if it's less than 1 minute, display message
-    LCDDisplay = "ISS IS OVERHEAD!"
+    LCDDisplay = "Overhead {secs} Sec".format(secs=dur)
     print (str(LCDDisplay))
 
 
