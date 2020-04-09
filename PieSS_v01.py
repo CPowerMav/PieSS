@@ -3,10 +3,11 @@
 #  The times are computed in UTC and the length of time that the ISS is above 10 degrees is in seconds.
 #  Epoch time: https://www.epochconverter.com
 
-import json, urllib.request, time
+import json, urllib.request, time, pigpio
 from gpiozero import LED
+from os import system
 
-#Define names for pinouts
+#Define variable names for pinouts
 
 LED_north = LED(17)
 LED_east = LED(27)
@@ -15,13 +16,13 @@ LED_west = LED(23)
 LED_oneMin = LED(5)
 LED_fiveMin = LED(6)
 LED_tenMin = LED(13)
+myServo = 16
 
-#Define variable names
+#Define other variable names
 
 momLatitude = 43.577090
 momLongitude = -79.727520
 altitude = 128
-
 url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude)
 
 # Compare minutes against time remaining for alerts
@@ -34,33 +35,16 @@ alertOneTriggered = False
 alertTwoTriggered = False
 alertThreeTriggered = False
 
+# connect to the pi for servo control
+pi = pigpio.pi
+
 alerts = ""
+
+# activate piGpio daemon
+system("sudo pigpiod")
 
 # How often we check API
 refreshTime = 5
-
-
-"""
-#For use later
-#A first JSON request to retrieve the name of all the astronauts currently in space.
-url = "http://api.open-notify.org/astros.json"
-response = urllib.request.urlopen(url)
-result = json.loads(response.read())
-print("There are currently " + str(result["number"]) + " astronauts in space:")
-print("")
-
-people = result["people"]
-
-for p in people:
-  print(p["name"] + " on board of " + p["craft"])
-"""
-
-"""
-this may be useful instead:
-http://open-notify.org/Open-Notify-API/ISS-Pass-Times/
-or
-https://gist.github.com/rochacbruno/2883505
-"""
 
 #Alerts - put logic here
 def AlertOne():
