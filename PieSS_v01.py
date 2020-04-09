@@ -1,4 +1,3 @@
-
 #  Overhead is defined as 10 degrees in elevation for the observer.
 #  The times are computed in UTC and the length of time that the ISS is above 10 degrees is in seconds.
 #  Epoch time: https://www.epochconverter.com
@@ -23,7 +22,7 @@ myServo = 16
 momLatitude = 43.577090
 momLongitude = -79.727520
 altitude = 128
-url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude)
+url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude) #Is this replacing values from the URL with our own?
 
 # Compare minutes against time remaining for alerts
 alertOne = 10
@@ -35,7 +34,7 @@ alertOneTriggered = False
 alertTwoTriggered = False
 alertThreeTriggered = False
 
-# connect to the pi for servo control
+# connect to the pi for servo control - Also, James, I don't know exactly what this does.
 pi = pigpio.pi
 
 alerts = ""
@@ -48,15 +47,23 @@ refreshTime = 5
 
 #Alerts - put logic here
 def AlertOne():
-  print("alert 1 triggered!")
+  print("Alert 1 triggered!")
+  LED_tenMin=on
   
 def AlertTwo():
-  print("alert 2 triggered!")
-  
+  print("Alert 2 triggered!")
+  LED_tenMin.off
+  LED_fiveMin.on
+    
 def AlertThree():
-  print("alert 3 triggered!")
-
-  
+  print("Alert 3 triggered!")
+  LED_fiveMin.off
+  LED_oneMin.on # How do we turn this off when the ISS has passed?
+  pi.set_servo_pulsewidth(myServo, 2500) # flag raised
+      sleep(1)
+  pi.set_servo_pulsewidth(myServo, 2500) # flag raised
+      sleep(1)
+    
 # Check if an alert has been triggered against the remaining time in minutes
 def CheckalertTimes(seconds):
   minutes = seconds/60
@@ -78,7 +85,7 @@ def CheckalertTimes(seconds):
         alertTwoTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
         AlertTwo()
-  elif minutes <= alertThree:
+  elif minutes <= alertThree: # I want to make sure the flag goes down after the ISS has passed. Where would that go? - It needs to go to down position, then turn off power to it.
       if alertThreeTriggered is False:
         alertThreeTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in ".format(one=alertOne, two=alertTwo, three=alertThree) + str(minutes*60) + " seconds"
@@ -112,7 +119,7 @@ while True:
   # print("\nResponse: " + str(resp))
 
   # Matches the 'iss-pass.json' json structure
-  request = resp["request"]
+  request = resp["request"] # why is this one resp?
   latitude = request["latitude"]
   longitude = request["longitude"]
   altitude = request["altitude"]
@@ -156,25 +163,5 @@ while True:
   time.sleep(refreshTime)   
 
 """
-#Adding a servo that raises a flag when it's time to go out and look at the sky
-import RPi.GPIO as GPIO
-from time import sleep
-
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(03, GPIO.OUT)
-pwm=GPIO.PWM(03, 50)
-pwm.start(0)
-
-def SetAngle(angle):
-	duty = angle / 18 + 2
-	GPIO.output(03, True)
-	pwm.ChangeDutyCycle(duty)
-	sleep(1)
-	GPIO.output(03, False)
-	pwm.ChangeDutyCycle(0)
-
-
-SetAngle(90) 
-pwm.stop()
-GPIO.cleanup()
+GPIO.cleanup() # need this somewhere?
 """
