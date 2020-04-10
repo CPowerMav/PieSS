@@ -5,6 +5,7 @@
 import json, urllib.request, time, pigpio
 from gpiozero import LED
 from os import system
+from time import sleep
 
 #Define variable names for pinouts
 
@@ -23,6 +24,7 @@ momLatitude = 43.577090
 momLongitude = -79.727520
 altitude = 128
 url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude) #Is this replacing values from the URL with our own?
+flagUp = False
 
 # Compare minutes against time remaining for alerts
 alertOne = 10
@@ -35,15 +37,15 @@ alertTwoTriggered = False
 alertThreeTriggered = False
 
 # connect to the pi for servo control - Also, James, I don't know exactly what this does.
-pi = pigpio.pi
+pi = pigpio.pi()
 
 alerts = ""
 
 # activate piGpio daemon
-system("sudo pigpiod")
+# system("sudo pigpiod")
 
 # How often we check API
-refreshTime = 5
+refreshTime = 15
 
 #Alerts - put logic here
 def AlertOne():
@@ -59,16 +61,18 @@ def AlertThree():
   print("Alert 3 triggered!")
   LED_fiveMin.off
   LED_oneMin.on # How do we turn this off when the ISS has passed?
-  pi.set_servo_pulsewidth(myServo, 2500) # flag raised
-      sleep(1)
-  pi.set_servo_pulsewidth(myServo, 2500) # flag raised
-      sleep(1)
+  pi.set_servo_pulsewidth(myServo, 600) # flag raised
+  sleep(1)
+  pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+  sleep(1)
+  flagUp = True
+  print("flag is up")
     
 # Check if an alert has been triggered against the remaining time in minutes
 def CheckalertTimes(seconds):
   minutes = seconds/60
   minutes = int(minutes)
-  minutes -= 159
+  # minutes -= 575
   
   global alertOneTriggered
   global alertTwoTriggered
@@ -97,6 +101,8 @@ def CheckalertTimes(seconds):
      # print("IIS is " + str(int(minutes)) + " minutes away")
      alerts = "Alerts:  {one}m [ ]  {two}m [ ]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
 
+"""
+
 # Display progress on LCD(16)
 def ShowLCD(tLeft, dur):
   value = int(tLeft / 60) # convert time to minutes
@@ -111,6 +117,7 @@ def ShowLCD(tLeft, dur):
     LCDDisplay = "Overhead {secs} Sec".format(secs=dur)
     print (str(LCDDisplay))
 
+"""
 
 while True:
   #Get JSON data
@@ -130,7 +137,7 @@ while True:
   # we're only grabbing the first index ('0') because we only need to see the next upcoming pass
   duration = response[0]["duration"] 
   risetime = response[0]["risetime"]
-
+  
   # This will list all your response/passes if you have a need later
   # but will have to store them in objects
   # for r in response:
@@ -144,21 +151,30 @@ while True:
   # Get current time (epoch time)
   currentTime = int(time.time())
   timeLeft = risetime - currentTime
+  
 
   # Check the remaining minutes against the alert times
   CheckalertTimes(timeLeft)
+  
 
   # Formatted output to view
-  print ("")
-  print ("=========[ Overhead ISS Pass ]==========")
+  print("")
+  print("=========[ Overhead ISS Pass ]==========")
   print(time.strftime("Next: %Y-%m-%d %I:%M:%S %p", time.localtime(risetime)))
-  print ("Duration: " + str(duration) + " seconds")
+  print("Duration: " + str(duration) + " seconds")
   print("Time Left: " + str(int(timeLeft/60)) + " minutes")
   print(alerts)
-  print ("=========================================")
-
-  ShowLCD(timeLeft, duration)
-      
+  print("=========================================")
+  # ShowLCD(timeLeft, duration)
+  
+  if timeLeft + duration <= 0:
+      if flagUp is True:
+           pi.set_servo_pulsewidth(myServo, 2400) # flag raised
+           sleep(1)
+           pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+           sleep(1)
+           flagUp = False
+           print("flag is down")
 
   time.sleep(refreshTime)   
 
