@@ -17,6 +17,8 @@ LED_oneMin = LED(17)
 LED_fiveMin = LED(27)
 LED_tenMin = LED(22)
 myServo = 16
+myServoUp = 2000 # Servo duty time for flag raised
+myServoDown = 1000 # Servo duty time for flag raised
 
 #Define other variable names
 
@@ -36,7 +38,7 @@ alertOneTriggered = False
 alertTwoTriggered = False
 alertThreeTriggered = False
 
-# connect to the pi for servo control - Also, James, I don't know exactly what this does.
+# connect to the pi for servo control
 pi = pigpio.pi()
 
 alerts = ""
@@ -45,29 +47,29 @@ alerts = ""
 # system("sudo pigpiod")
 
 # How often we check API
-refreshTime = 15
+refreshTime = 10
 
 #Alerts - put logic here
 def AlertOne():
   print("Alert 1 triggered!")
-  LED_tenMin.on
+  LED_tenMin.on()
   print("Ten minute light is on")
   
 def AlertTwo():
   print("Alert 2 triggered!")
-  LED_tenMin.off
+  LED_tenMin.off()
   print("Ten minute light is off")
-  LED_fiveMin.on
+  LED_fiveMin.on()
   print("Five minute light is on")
     
 def AlertThree():
   print("Alert 3 triggered!")
-  LED_fiveMin.off
-  LED_oneMin.on
+  LED_fiveMin.off()
+  LED_oneMin.on()
   print("One minute light is on")
-  pi.set_servo_pulsewidth(myServo, 600) # flag raised
+  pi.set_servo_pulsewidth(myServo, myServoUp) # flag raised
   sleep(1)
-  pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+  pi.set_servo_pulsewidth(myServo, myServoDown) # flag motor off
   sleep(1)
   flagUp = True
   print("flag is up")
@@ -76,7 +78,7 @@ def AlertThree():
 def CheckalertTimes(seconds):
   minutes = seconds/60
   minutes = int(minutes)
-  # minutes -= 575 # This is an offest for testing
+  minutes -= 45 # This is an offest for testing
   
   global alertOneTriggered
   global alertTwoTriggered
@@ -168,24 +170,24 @@ while True:
   print("Duration: " + str(duration) + " seconds")
   print("Time Left: " + str(int(timeLeft/60)) + " minutes")
   print(alerts)
-  print("=========================================")
+  print("========================================")
   # ShowLCD(timeLeft, duration)
   
   if timeLeft + duration <= 0: #
       if flagUp is True:
-           pi.set_servo_pulsewidth(myServo, 2400) # flag raised
+           pi.set_servo_pulsewidth(myServo, myServoDown) # put the flag down
            sleep(1)
            pi.set_servo_pulsewidth(myServo, 0) # flag motor off
            sleep(1)
            flagUp = False
            print("Flag is down")
-           LED_tenMin.off # Make sure all of the LED lights turn off
-           LED_fiveMin.off
-           LED_oneMin.off
-           LED_north.off
-           LED_east.off
-           LED_south.off
-           LED_west.off
+           LED_tenMin.off() # Make sure all of the LED lights turn off
+           LED_fiveMin.off()
+           LED_oneMin.off()
+           LED_north.off()
+           LED_east.off()
+           LED_south.off()
+           LED_west.off()
            print("Lights are off")
 
   time.sleep(refreshTime)   
