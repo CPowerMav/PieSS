@@ -9,6 +9,7 @@ from time import sleep
 
 #Define variable names for pinouts
 
+# LED
 LED_north = LED(5)
 LED_east = LED(6)
 LED_south = LED(13)
@@ -16,18 +17,23 @@ LED_west = LED(12)
 LED_oneMin = LED(17)
 LED_fiveMin = LED(27)
 LED_tenMin = LED(22)
+
+# Servo
+pi = pigpio.pi()
+
 myServo = 16
 myServoUp = 2000 # Servo duty time for flag raised
 myServoDown = 1000 # Servo duty time for flag raised
+flagUp = False
 
-#Define other variable names
-
+# API
 momLatitude = 43.577090
 momLongitude = -79.727520
 altitude = 128
-url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude) #Is this replacing values from the URL with our own?
-flagUp = False
+url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude)
+refreshTime = 10 # How often we check API
 
+#Alerts
 # Compare minutes against time remaining for alerts
 alertOne = 10
 alertTwo = 5
@@ -38,16 +44,10 @@ alertOneTriggered = False
 alertTwoTriggered = False
 alertThreeTriggered = False
 
-# connect to the pi for servo control
-pi = pigpio.pi()
-
 alerts = ""
 
 # activate piGpio daemon
 # system("sudo pigpiod")
-
-# How often we check API
-refreshTime = 10
 
 #Alerts - put logic here
 def AlertOne():
@@ -69,17 +69,33 @@ def AlertThree():
   print("One minute light is on")
   pi.set_servo_pulsewidth(myServo, myServoUp) # flag raised
   sleep(1)
-  pi.set_servo_pulsewidth(myServo, myServoDown) # flag motor off
+  pi.set_servo_pulsewidth(myServo, 0) # flag motor off
   sleep(1)
   flagUp = True
   print("flag is up")
+
+#reset everything back to default!
+  def Reset():
+    print("resetting")
+    LED_tenMin.off()
+    LED_fiveMin.off()
+    LED_oneMin.off()
+    LED_north.off()
+    LED_east.off()
+    LED_south.off()
+    LED_west.off()
+    pi.set_servo_pulsewidth(myServo, myServoDown) # flag raised
+    sleep(1)
+    pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+    sleep(1)
+    flagUp = False
     
 # Check if an alert has been triggered against the remaining time in minutes
 def CheckalertTimes(seconds):
   minutes = seconds/60
   minutes = int(minutes)
-  minutes -= 45 # This is an offest for testing
-  
+  # minutes -= 652 # This is an offest for testing
+  print("debug minutes: " + str(minutes))
   global alertOneTriggered
   global alertTwoTriggered
   global alertThreeTriggered
@@ -95,7 +111,7 @@ def CheckalertTimes(seconds):
         alertTwoTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
         AlertTwo()
-  elif minutes <= alertThree: # I want to make sure the flag goes down after the ISS has passed. Where would that go? - It needs to go to down position, then turn off power to it.
+  elif minutes <= alertThree and minutes >= 0: # I want to make sure the flag goes down after the ISS has passed. Where would that go? - It needs to go to down position, then turn off power to it.
       if alertThreeTriggered is False:
         alertThreeTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in ".format(one=alertOne, two=alertTwo, three=alertThree) + str(minutes*60) + " seconds"
@@ -104,9 +120,9 @@ def CheckalertTimes(seconds):
      alertOneTriggered = False
      alertTwoTriggered = False
      alertThreeTriggered = False
-     # print("IIS is " + str(int(minutes)) + " minutes away")
      alerts = "Alerts:  {one}m [ ]  {two}m [ ]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
-
+     # print("IIS is " + str(int(minutes)) + " minutes away")
+     
 """
 
 # Display progress on LCD(16) - Future feature
@@ -157,11 +173,9 @@ while True:
   # Get current time (epoch time)
   currentTime = int(time.time())
   timeLeft = risetime - currentTime
-  
 
   # Check the remaining minutes against the alert times
   CheckalertTimes(timeLeft)
-  
 
   # Formatted output to view
   print("")
@@ -172,23 +186,13 @@ while True:
   print(alerts)
   print("========================================")
   # ShowLCD(timeLeft, duration)
-  
-  if timeLeft + duration <= 0: #
-      if flagUp is True:
-           pi.set_servo_pulsewidth(myServo, myServoDown) # put the flag down
-           sleep(1)
-           pi.set_servo_pulsewidth(myServo, 0) # flag motor off
-           sleep(1)
-           flagUp = False
-           print("Flag is down")
-           LED_tenMin.off() # Make sure all of the LED lights turn off
-           LED_fiveMin.off()
-           LED_oneMin.off()
-           LED_north.off()
-           LED_east.off()
-           LED_south.off()
-           LED_west.off()
-           print("Lights are off")
+
+  checktime = int(timeLeft/60)
+  # print (checktime)
+  if checktime == 0:
+    print ("is flag up?" + flagUp)
+    if flagUp is True:
+      Reset()
 
   time.sleep(refreshTime)   
 
