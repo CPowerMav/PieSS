@@ -75,20 +75,20 @@ def AlertThree():
   print("flag is up")
 
 #reset everything back to default!
-  def Reset():
-    print("resetting")
-    LED_tenMin.off()
-    LED_fiveMin.off()
-    LED_oneMin.off()
-    LED_north.off()
-    LED_east.off()
-    LED_south.off()
-    LED_west.off()
-    pi.set_servo_pulsewidth(myServo, myServoDown) # flag raised
-    sleep(1)
-    pi.set_servo_pulsewidth(myServo, 0) # flag motor off
-    sleep(1)
-    flagUp = False
+def Reset():
+  print("resetting")
+  LED_tenMin.off()
+  LED_fiveMin.off()
+  LED_oneMin.off()
+  LED_north.off()
+  LED_east.off()
+  LED_south.off()
+  LED_west.off()
+  pi.set_servo_pulsewidth(myServo, myServoDown) # flag raised
+  sleep(1)
+  pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+  sleep(1)
+  flagUp = False
     
 # Check if an alert has been triggered against the remaining time in minutes
 def CheckalertTimes(seconds):
@@ -111,7 +111,7 @@ def CheckalertTimes(seconds):
         alertTwoTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [ ]".format(one=alertOne, two=alertTwo, three=alertThree)
         AlertTwo()
-  elif minutes <= alertThree and minutes >= 0: # I want to make sure the flag goes down after the ISS has passed. Where would that go? - It needs to go to down position, then turn off power to it.
+  elif minutes <= alertThree and minutes >= 0:
       if alertThreeTriggered is False:
         alertThreeTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in ".format(one=alertOne, two=alertTwo, three=alertThree) + str(minutes*60) + " seconds"
