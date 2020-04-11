@@ -62,7 +62,7 @@ def AlertTwo():
   LED_fiveMin.on()
   print("Five minute light is on")
     
-def AlertThree():
+def AlertThree(duration):
   print("Alert 3 triggered!")
   LED_fiveMin.off()
   LED_oneMin.on()
@@ -73,6 +73,8 @@ def AlertThree():
   sleep(1)
   flagUp = True
   print("flag is up")
+  sleep(duration)
+  Reset()
 
 #reset everything back to default!
 def Reset():
@@ -91,7 +93,7 @@ def Reset():
   flagUp = False
     
 # Check if an alert has been triggered against the remaining time in minutes
-def CheckalertTimes(seconds):
+def CheckalertTimes(seconds, duration):
   minutes = seconds/60
   minutes = int(minutes)
   # minutes -= 652 # This is an offest for testing
@@ -115,7 +117,7 @@ def CheckalertTimes(seconds):
       if alertThreeTriggered is False:
         alertThreeTriggered = True
         alerts = "Alerts:  {one}m [X]  {two}m [X]  {three}m [X] \nIIS Overhead is coming in ".format(one=alertOne, two=alertTwo, three=alertThree) + str(minutes*60) + " seconds"
-        AlertThree()
+        AlertThree(duration)
   else:
      alertOneTriggered = False
      alertTwoTriggered = False
@@ -175,7 +177,7 @@ while True:
   timeLeft = risetime - currentTime
 
   # Check the remaining minutes against the alert times
-  CheckalertTimes(timeLeft)
+  CheckalertTimes(timeLeft, duration)
 
   # Formatted output to view
   print("")
@@ -186,13 +188,6 @@ while True:
   print(alerts)
   print("========================================")
   # ShowLCD(timeLeft, duration)
-
-  checktime = int(timeLeft/60)
-  # print (checktime)
-  if checktime == 0:
-    print ("is flag up?" + flagUp)
-    if flagUp is True:
-      Reset()
 
   time.sleep(refreshTime)   
 
