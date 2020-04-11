@@ -22,8 +22,8 @@ LED_tenMin = LED(22)
 pi = pigpio.pi()
 
 myServo = 16
-myServoUp = 2000 # Servo duty time for flag raised
-myServoDown = 1000 # Servo duty time for flag raised
+myServoUp = 530 # Servo duty time for flag raised
+myServoDown = 1530 # Servo duty time for flag raised
 flagUp = False
 
 # API
@@ -47,7 +47,7 @@ alertThreeTriggered = False
 alerts = ""
 
 # activate piGpio daemon
-# system("sudo pigpiod")
+system("sudo pigpiod")
 
 #Alerts - put logic here
 def AlertOne():
@@ -96,7 +96,7 @@ def Reset():
 def CheckalertTimes(seconds, duration):
   minutes = seconds/60
   minutes = int(minutes)
-  # minutes -= 652 # This is an offest for testing
+#  minutes -= 510 # This is an offest for testing
   print("debug minutes: " + str(minutes))
   global alertOneTriggered
   global alertTwoTriggered
