@@ -2,13 +2,13 @@
 #  The times are computed in UTC and the length of time that the ISS is above 10 degrees is in seconds.
 #  Epoch time: https://www.epochconverter.com
 
-import json, urllib.request, time, pigpio
-from gpiozero import LED
+import json, urllib.request, time#, pigpio
+#from gpiozero import LED
 from os import system
 from time import sleep
 
 #Define variable names for pinouts
-
+"""
 #LED
 LED_north = LED(5)
 LED_east = LED(6)
@@ -17,13 +17,15 @@ LED_west = LED(12)
 LED_oneMin = LED(17)
 LED_fiveMin = LED(27)
 LED_tenMin = LED(22)
-
+"""
 # Servo
-pi = pigpio.pi()
+#pi = pigpio.pi()
 
+"""
 myServo = 16
 myServoUp = 530 # Servo duty time for flag raised
 myServoDown = 1530 # Servo duty time for flag raised
+"""
 flagUp = False
 
 # API
@@ -47,29 +49,29 @@ alertThreeTriggered = False
 alerts = ""
 
 # activate piGpio daemon
-system("sudo pigpiod")
+#system("sudo pigpiod")
 
 #Alerts - put logic here
 def AlertOne():
   print("Alert 1 triggered!")
-  LED_tenMin.on()
+  #LED_tenMin.on()
   print("Ten minute light is on")
   
 def AlertTwo():
   print("Alert 2 triggered!")
-  LED_tenMin.off()
+  #LED_tenMin.off()
   print("Ten minute light is off")
-  LED_fiveMin.on()
+  #LED_fiveMin.on()
   print("Five minute light is on")
     
 def AlertThree(duration):
   print("Alert 3 triggered!")
-  LED_fiveMin.off()
-  LED_oneMin.on()
+  #LED_fiveMin.off()
+  #LED_oneMin.on()
   print("One minute light is on")
-  pi.set_servo_pulsewidth(myServo, myServoUp) # flag raised
+  #pi.set_servo_pulsewidth(myServo, myServoUp) # flag raised
   sleep(1)
-  pi.set_servo_pulsewidth(myServo, 0) # flag motor off
+  #pi.set_servo_pulsewidth(myServo, 0) # flag motor off
   sleep(1)
   flagUp = True
   print("flag is up")
@@ -79,6 +81,7 @@ def AlertThree(duration):
 #reset everything back to default!
 def Reset():
   print("resetting")
+  """
   LED_tenMin.off()
   LED_fiveMin.off()
   LED_oneMin.off()
@@ -90,6 +93,7 @@ def Reset():
   sleep(1)
   pi.set_servo_pulsewidth(myServo, 0) # flag motor off
   sleep(1)
+  """
   flagUp = False
     
 # Check if an alert has been triggered against the remaining time in minutes
