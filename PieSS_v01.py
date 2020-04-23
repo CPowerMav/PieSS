@@ -9,7 +9,7 @@ from time import sleep
 
 #Define variable names for pinouts
 
-# LED
+LED
 LED_north = LED(5)
 LED_east = LED(6)
 LED_south = LED(13)
@@ -31,7 +31,7 @@ momLatitude = 43.577090
 momLongitude = -79.727520
 altitude = 128
 url = "http://api.open-notify.org/iss-pass.json?lat={lat}&lon={long}&alt={a}".format(lat=momLatitude, long=momLongitude, a=altitude)
-refreshTime = 10 # How often we check API
+refreshTime = 5 # How often we check API
 
 #Alerts
 # Compare minutes against time remaining for alerts
@@ -143,52 +143,50 @@ def ShowLCD(tLeft, dur):
 
 """
 
+def Error(e):
+  #Define error behaviour, for example you can add an network indicator LED, etc.
+  print("ERROR: " + e)
+
 while True:
-  #Get JSON data
-  req = urllib.request.urlopen(url)
-  resp = json.loads(req.read())
-  # print("\nResponse: " + str(resp))
 
-  # Matches the 'iss-pass.json' json structure
-  request = resp["request"] # why is this one resp?
-  latitude = request["latitude"]
-  longitude = request["longitude"]
-  altitude = request["altitude"]
-  datetime = request["datetime"] # generated time, not current - helps if we can't get current time on a device
+  try:
+    #Get JSON data
+    req = urllib.request.urlopen(url)
+    resp = json.loads(req.read())
+
+    # Matches the 'iss-pass.json' json structure
+    request = resp["request"] # why is this one resp?
+    latitude = request["latitude"]
+    longitude = request["longitude"]
+    altitude = request["altitude"]
+    datetime = request["datetime"] # generated time, not current - helps if we can't get current time on a device
+    
+    # Get first overhead response
+    response = resp["response"]
+    # we're only grabbing the first index ('0') because we only need to see the next upcoming pass
+    duration = response[0]["duration"] 
+    risetime = response[0]["risetime"]
+
+    # Get current time (epoch time)
+    currentTime = int(time.time())
+    timeLeft = risetime - currentTime
+
+    # Check the remaining minutes against the alert times
+    CheckalertTimes(timeLeft, duration)
+
+    # Formatted output to view
+    print("")
+    print("=========[ Overhead ISS Pass ]==========")
+    print(time.strftime("Next: %Y-%m-%d %I:%M:%S %p", time.localtime(risetime)))
+    print("Duration: " + str(duration) + " seconds")
+    print("Time Left: " + str(int(timeLeft/60)) + " minutes")
+    print(alerts)
+    print("========================================")
+    # ShowLCD(timeLeft, duration)
+  except urllib.error.URLError as ex:
+    Error(str(ex.reason))
+    pass
   
-  # Get first overhead response
-  response = resp["response"]
-  # we're only grabbing the first index ('0') because we only need to see the next upcoming pass
-  duration = response[0]["duration"] 
-  risetime = response[0]["risetime"]
-  
-  # This will list all your response/passes if you have a need later
-  # but will have to store them in objects
-  # for r in response:
-  #   print ("response: "+str(r))
-
-  # values sent, we can use to confirm they come back correctly
-  # print("\nLat: " + str(latitude))
-  # print("\nLong: " + str(longitude))
-  # print("\nAlt: " + str(altitude))
-
-  # Get current time (epoch time)
-  currentTime = int(time.time())
-  timeLeft = risetime - currentTime
-
-  # Check the remaining minutes against the alert times
-  CheckalertTimes(timeLeft, duration)
-
-  # Formatted output to view
-  print("")
-  print("=========[ Overhead ISS Pass ]==========")
-  print(time.strftime("Next: %Y-%m-%d %I:%M:%S %p", time.localtime(risetime)))
-  print("Duration: " + str(duration) + " seconds")
-  print("Time Left: " + str(int(timeLeft/60)) + " minutes")
-  print(alerts)
-  print("========================================")
-  # ShowLCD(timeLeft, duration)
-
   time.sleep(refreshTime)   
 
 """
