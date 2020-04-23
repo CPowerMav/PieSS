@@ -9,7 +9,7 @@ from time import sleep
 
 #Define variable names for pinouts
 
-LED
+#LED
 LED_north = LED(5)
 LED_east = LED(6)
 LED_south = LED(13)
