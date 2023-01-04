@@ -70,4 +70,16 @@ while True:
         # Move the servo back to 0 degrees
         servo.set_servo_pulsewidth(SERVO_MAX)
 
-        # Turn off all direction
+        # Turn off all direction LEDs
+        pi.write(LED_N, pigpio.LOW)
+        pi.write(LED_E, pigpio.LOW)
+        pi.write(LED_S, pigpio.LOW)
+        pi.write(LED_W, pigpio.LOW)
+# Sleep for 5 seconds before checking again
+time.sleep(5)
+
+# Clean up pigpio and servo resources
+servo.stop()
+pi.stop()
+
+
