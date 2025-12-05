@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-iss_tracker.py
+"""iss_tracker.py
 Main program for tracking the ISS and raising a flag with LEDs and a servo.
+
 Features:
 - Automatic IP-based location detection
 - Night-time only alerts
@@ -11,13 +11,14 @@ Features:
 - Automatic TLE caching
 """
 
-import time
 import os
-import requests
+import time
 from datetime import datetime, timedelta
+
+import requests
 import pigpio
 from gpiozero import LED
-from skyfield.api import Topos, load, EarthSatellite
+from skyfield.api import Topos, load
 
 # ----------------------------
 # CONFIGURATION
@@ -29,8 +30,8 @@ TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle'
 TLE_REFRESH_HOURS = 12  # Refresh TLE data every 12 hours
 
 # Visibility filters
-MIN_ELEVATION = 15.0  # Minimum degrees above horizon
-MAX_SUN_ELEVATION = -6.0  # Sun must be below -6° (Civil Twilight)
+MIN_ELEVATION = 15.0     # Minimum degrees above horizon
+MAX_SUN_ELEVATION = -6.0 # Sun must be below -6° (civil twilight)
 
 # Alert timings (seconds)
 ALERT_1_SEC = 600  # 10 minutes
@@ -42,6 +43,16 @@ SERVO_PIN = 16
 SERVO_UP = 530
 SERVO_DOWN = 1530
 
+# LED GPIO pins
+LED_10M_PIN = 22  # Red: 10-minute alert
+LED_5M_PIN = 27   # Yellow: 5-minute alert
+LED_1M_PIN = 17   # Green: 1-minute alert
+
+LED_N_PIN = 5     # North direction
+LED_E_PIN = 6     # East direction
+LED_S_PIN = 13    # South direction
+LED_W_PIN = 12    # West direction
+
 # ----------------------------
 # HARDWARE SETUP
 # ----------------------------
@@ -52,33 +63,33 @@ if not pi.connected:
     raise RuntimeError("Could not connect to pigpio. Run 'sudo pigpiod'.")
 
 # Initialize LEDs
-led_10m = LED(22)   # Red: 10-minute alert
-led_5m = LED(27)    # Yellow: 5-minute alert
-led_1m = LED(17)    # Green: 1-minute alert
+led_10m = LED(LED_10M_PIN)
+led_5m = LED(LED_5M_PIN)
+led_1m = LED(LED_1M_PIN)
 
-led_n = LED(5)      # North direction
-led_e = LED(6)      # East direction
-led_s = LED(13)     # South direction
-led_w = LED(12)     # West direction
+led_n = LED(LED_N_PIN)
+led_e = LED(LED_E_PIN)
+led_s = LED(LED_S_PIN)
+led_w = LED(LED_W_PIN)
 
-# Optional running LED (status indicator)
-led_running = LED(5)
 
 # ----------------------------
 # HELPER FUNCTIONS
 # ----------------------------
 
-def set_servo(position, hold_torque=True):
-    """
-    Move servo to a given position.
-    hold_torque: keep pulse to hold position if True; detach to reduce power/heat if False.
+def set_servo(position: int, hold_torque: bool = True) -> None:
+    """Move servo to a given pulse-width position.
+
+    If hold_torque is False, the pulse is released after 1s so the servo
+    is not powered continuously (less heat / noise).
     """
     pi.set_servo_pulsewidth(SERVO_PIN, position)
     if not hold_torque:
         time.sleep(1)
         pi.set_servo_pulsewidth(SERVO_PIN, 0)
 
-def reset_leds():
+
+def reset_leds() -> None:
     """Turn off all LEDs."""
     led_10m.off()
     led_5m.off()
@@ -88,58 +99,96 @@ def reset_leds():
     led_s.off()
     led_w.off()
 
-def update_direction_leds(azimuth):
-    """
-    Update directional LEDs based on azimuth degrees.
+
+def update_direction_leds(azimuth: float) -> None:
+    """Update directional LEDs based on azimuth in degrees.
+
     North = 0/360°, East = 90°, South = 180°, West = 270°
     """
-    led_n.off(); led_e.off(); led_s.off(); led_w.off()
-    if azimuth >= 315 or azimuth < 45: led_n.on()
-    elif 45 <= azimuth < 135: led_e.on()
-    elif 135 <= azimuth < 225: led_s.on()
-    elif 225 <= azimuth < 315: led_w.on()
+    led_n.off()
+    led_e.off()
+    led_s.off()
+    led_w.off()
+
+    if azimuth >= 315 or azimuth < 45:
+        led_n.on()
+    elif 45 <= azimuth < 135:
+        led_e.on()
+    elif 135 <= azimuth < 225:
+        led_s.on()
+    elif 225 <= azimuth < 315:
+        led_w.on()
+
 
 def get_location():
-    """
-    Attempt to detect geographical location via IP geolocation.
-    Returns (latitude, longitude, altitude) or defaults if detection fails.
+    """Detect geographical location via IP geolocation.
+
+    Returns (latitude, longitude, altitude_meters).
+
+    If detection fails, fall back to a default location.
     """
     try:
-        r = requests.get("https://ipapi.co/json/")
-        data = r.json()
-        return float(data["latitude"]), float(data["longitude"]), float(data.get("altitude", 0))
-    except:
-        print("Location detection failed, using default coordinates.")
-        return 43.577090, -79.727520, 128
+        resp = requests.get("https://ipapi.co/json/", timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        lat = float(data["latitude"])
+        lon = float(data["longitude"])
+        alt = float(data.get("altitude", 0.0) or 0.0)
+        print(f"Detected location: {lat:.4f}, {lon:.4f}, alt {alt:.0f}m")
+        return lat, lon, alt
+    except Exception as exc:
+        print(f"Location detection failed ({exc}), using default coordinates.")
+        # Default: Mississauga, ON (example)
+        return 43.577090, -79.727520, 128.0
+
 
 def get_satellite_data():
-    """
-    Load TLE data for ISS, using local cache when available.
-    """
+    """Load TLE data for ISS, using local cache when available."""
     ts = load.timescale()
     should_download = True
+
     if os.path.exists(CACHE_FILE):
         age = time.time() - os.path.getmtime(CACHE_FILE)
         if age < (TLE_REFRESH_HOURS * 3600):
             should_download = False
-    satellites = load.tle_file(TLE_URL, filename=CACHE_FILE, reload=should_download)
+
+    try:
+        satellites = load.tle_file(
+            TLE_URL,
+            filename=CACHE_FILE,
+            reload=should_download,
+        )
+    except Exception as exc:
+        # If download failed but cache exists, try using the cached file only.
+        print(f"TLE download failed ({exc}).")
+        if os.path.exists(CACHE_FILE):
+            print("Using cached TLE file.")
+            satellites = load.tle_file(CACHE_FILE)
+        else:
+            raise
+
     by_name = {sat.name: sat for sat in satellites}
     return by_name['ISS (ZARYA)'], ts
 
-def is_location_dark(observer, time_t, ephemeris):
-    """
-    Check if it is night-time at the observer's location.
+
+def is_location_dark(observer_topos: Topos, time_t, ephemeris) -> bool:
+    """Check if it is night-time at the observer's location.
+
     Returns True if the sun is below MAX_SUN_ELEVATION.
     """
     sun = ephemeris['sun']
+    earth = ephemeris['earth']
+    observer = earth + observer_topos
+
     alt, _, _ = observer.at(time_t).observe(sun).apparent().altaz()
     return alt.degrees < MAX_SUN_ELEVATION
+
 
 # ----------------------------
 # MAIN LOOP
 # ----------------------------
 
-def main():
+def main() -> None:
     print("--- Starting ISS Tracker ---")
 
     # Load ephemeris for sun calculations
@@ -161,67 +210,99 @@ def main():
             # Calculate passes for next 24 hours
             t0 = ts.now()
             t1 = ts.from_datetime(t0.utc_datetime() + timedelta(days=1))
-            times, events = iss.find_events(observer_location, t0, t1, altitude_degrees=MIN_ELEVATION)
+            times, events = iss.find_events(
+                observer_location, t0, t1, altitude_degrees=MIN_ELEVATION
+            )
 
             next_pass_found = False
 
             # Iterate to find first visible pass
             for i in range(len(times)):
-                if events[i] != 0: continue  # Skip if not rise
-                if i + 2 >= len(times): break  # Ensure rise-peak-set exists
+                if events[i] != 0:
+                    # 0 = rise, 1 = peak, 2 = set
+                    continue
 
-                rise_t, peak_t, set_t = times[i], times[i+1], times[i+2]
+                if i + 2 >= len(times):
+                    # Ensure we have rise-peak-set trio
+                    break
+
+                rise_t, peak_t, set_t = times[i], times[i + 1], times[i + 2]
 
                 # Skip if peak occurs during daylight
                 if not is_location_dark(observer_location, peak_t, eph):
-                    print(f"Skipping pass at {rise_t.utc_iso()} (Daylight)")
+                    print(f"Skipping pass at {rise_t.utc_iso()} (daylight)")
                     continue
 
                 next_pass_found = True
 
                 # Calculate duration and time to rise
-                now = ts.now()
+                now_ts = ts.now()
                 rise_dt = rise_t.utc_datetime()
                 set_dt = set_t.utc_datetime()
                 duration_sec = (set_dt - rise_dt).total_seconds()
-                seconds_to_rise = (rise_dt - now.utc_datetime()).total_seconds()
+                seconds_to_rise = (rise_dt - now_ts.utc_datetime()).total_seconds()
 
-                # Sleep until 12 minutes before rise
+                print(
+                    f"Next visible pass: rise {rise_dt} UTC, duration {duration_sec:.0f}s, "
+                    f"starts in {seconds_to_rise/60:.1f} minutes"
+                )
+
+                # Sleep until 12 minutes before rise (gives time for LEDs to step up)
                 time_to_wait = seconds_to_rise - 720
-                if time_to_wait > 0: time.sleep(time_to_wait)
+                if time_to_wait > 0:
+                    time.sleep(time_to_wait)
 
                 # Track alerts
-                alert1_fired = alert2_fired = alert3_fired = flag_is_up = False
+                alert1_fired = False
+                alert2_fired = False
+                alert3_fired = False
+
                 while True:
                     now = ts.now().utc_datetime()
                     remaining = (rise_dt - now).total_seconds()
-                    if now > set_dt: break
+
+                    if now > set_dt:
+                        # Pass is over
+                        break
 
                     # Alerts
                     if ALERT_1_SEC >= remaining > ALERT_2_SEC and not alert1_fired:
-                        led_10m.on(); alert1_fired = True
-                    elif ALERT_2_SEC >= remaining > ALERT_3_SEC and not alert2_fired:
-                        led_10m.off(); led_5m.on(); alert2_fired = True
-                    elif ALERT_3_SEC >= remaining > 0 and not alert3_fired:
-                        led_5m.off(); led_1m.on()
-                        set_servo(SERVO_UP, hold_torque=True)
-                        flag_is_up = True; alert3_fired = True
+                        print("10-minute alert")
+                        led_10m.on()
+                        alert1_fired = True
 
-                    # Direction LEDs
+                    elif ALERT_2_SEC >= remaining > ALERT_3_SEC and not alert2_fired:
+                        print("5-minute alert")
+                        led_10m.off()
+                        led_5m.on()
+                        alert2_fired = True
+
+                    elif ALERT_3_SEC >= remaining > 0 and not alert3_fired:
+                        print("1-minute alert (raising flag)")
+                        led_5m.off()
+                        led_1m.on()
+                        set_servo(SERVO_UP, hold_torque=True)
+                        alert3_fired = True
+
+                    # Direction LEDs in the last minute before rise
                     if remaining < 60:
                         difference = iss - observer_location
-                        alt, az, distance = difference.at(ts.now()).altaz()
-                        if alt.degrees > 0: update_direction_leds(az.degrees)
+                        alt, az, _ = difference.at(ts.now()).altaz()
+                        if alt.degrees > 0:
+                            update_direction_leds(az.degrees)
 
                     time.sleep(0.5)
 
                 # Reset hardware after pass
+                print("Pass complete, lowering flag.")
                 reset_leds()
                 set_servo(SERVO_DOWN, hold_torque=False)
-                break
+                break  # Break out of event loop, re-calc passes
 
-            # Sleep if no visible pass
-            if not next_pass_found: time.sleep(3600)
+            # If we didn't find any visible pass, wait an hour and try again
+            if not next_pass_found:
+                print("No visible pass in next 24h, sleeping 1 hour.")
+                time.sleep(3600)
 
         except Exception as e:
             print(f"Error: {e}")
@@ -229,10 +310,12 @@ def main():
             set_servo(SERVO_DOWN, hold_torque=False)
             time.sleep(60)
 
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
+        print("Exiting on Ctrl+C, cleaning up GPIO.")
         reset_leds()
         set_servo(SERVO_DOWN, hold_torque=False)
         pi.stop()
