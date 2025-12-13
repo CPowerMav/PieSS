@@ -83,37 +83,32 @@ def wifi_scan() -> list[dict]:
     networks.sort(key=lambda n: (not n["in_use"], -n["signal"], n["ssid"].lower()))
     return networks
 
-
 def nmcli_connect(ssid: str, password: str | None) -> tuple[bool, str]:
-    """
-    Connect to Wi-Fi using NetworkManager.
-    Returns (success, message).
-    """
     ssid = (ssid or "").strip()
     password = (password or "").strip()
 
     if not ssid:
         return False, "SSID is required."
 
-    # If password is empty, try open network connect
-    cmd = [
-        "nmcli", "dev", "wifi", "connect", ssid,
-        "ifname", WIFI_IFACE
-    ]
-
+    cmd = ["nmcli", "dev", "wifi", "connect", ssid, "ifname", WIFI_IFACE]
     if password:
-        cmd += [
-            "wifi-sec.key-mgmt", "wpa-psk",
-            "password", password
-        ]
+        cmd += ["password", password]
 
-
+    # Run connect attempt
     rc, out, err = run(cmd, timeout=45)
-    if rc != 0:
-        msg = err or out or "Unknown nmcli error."
-        return False, msg
 
-    return True, out or "Connected."
+    # Always check device state after attempt
+    time.sleep(2)
+    rc2, out2, _ = run(["nmcli", "-t", "-f", "DEVICE,STATE", "dev", "status"])
+
+    for line in out2.splitlines():
+        dev, state = line.split(":")[:2]
+        if dev == WIFI_IFACE and state == "connected":
+            return True, f"Connected to {ssid}."
+
+    # Not connected → return real error
+    msg = err or out or "Failed to connect."
+    return False, msg
 
 
 @app.route("/")
