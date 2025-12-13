@@ -119,27 +119,67 @@ def update_direction_leds(azimuth: float) -> None:
     elif 225 <= azimuth < 315:
         led_w.on()
 
-
 def get_location():
     """Detect geographical location via IP geolocation.
 
+    Tries multiple providers in order.
     Returns (latitude, longitude, altitude_meters).
-
-    If detection fails, fall back to a default location.
+    Altitude defaults to 0.0 (not critical for ISS tracking).
     """
-    try:
-        resp = requests.get("https://ipapi.co/json/", timeout=5)
-        resp.raise_for_status()
-        data = resp.json()
-        lat = float(data["latitude"])
-        lon = float(data["longitude"])
-        alt = float(data.get("altitude", 0.0) or 0.0)
-        print(f"Detected location: {lat:.4f}, {lon:.4f}, alt {alt:.0f}m")
-        return lat, lon, alt
-    except Exception as exc:
-        print(f"Location detection failed ({exc}), using default coordinates.")
-        # Default: Mississauga, ON (example)
-        return 43.577090, -79.727520, 128.0
+
+    providers = [
+        {
+            "name": "ipapi",
+            "url": "https://ipapi.co/json/",
+            "lat": lambda d: d.get("latitude"),
+            "lon": lambda d: d.get("longitude"),
+        },
+        {
+            "name": "ipinfo",
+            "url": "https://ipinfo.io/json",
+            "lat": lambda d: float(d["loc"].split(",")[0]) if "loc" in d else None,
+            "lon": lambda d: float(d["loc"].split(",")[1]) if "loc" in d else None,
+        },
+        {
+            "name": "ifconfig",
+            "url": "https://ifconfig.co/json",
+            "lat": lambda d: d.get("latitude"),
+            "lon": lambda d: d.get("longitude"),
+        },
+    ]
+
+    headers = {
+        "User-Agent": "ISS-Tracker/1.0 (Raspberry Pi)"
+    }
+
+    for provider in providers:
+        try:
+            resp = requests.get(provider["url"], headers=headers, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            lat = provider["lat"](data)
+            lon = provider["lon"](data)
+
+            if lat is None or lon is None:
+                raise ValueError("Latitude/longitude missing")
+
+            lat = float(lat)
+            lon = float(lon)
+
+            print(
+                f"Detected location via {provider['name']}: "
+                f"{lat:.4f}, {lon:.4f}, alt 0m"
+            )
+
+            return lat, lon, 0.0
+
+        except Exception as exc:
+            print(f"Location provider {provider['name']} failed ({exc})")
+
+    # Final fallback (only if all providers fail)
+    print("All location providers failed, using default coordinates.")
+    return 43.577090, -79.727520, 128.0
 
 
 def get_satellite_data():
