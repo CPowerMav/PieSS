@@ -96,9 +96,17 @@ def nmcli_connect(ssid: str, password: str | None) -> tuple[bool, str]:
         return False, "SSID is required."
 
     # If password is empty, try open network connect
-    cmd = ["nmcli", "dev", "wifi", "connect", ssid, "ifname", WIFI_IFACE]
+    cmd = [
+        "nmcli", "dev", "wifi", "connect", ssid,
+        "ifname", WIFI_IFACE
+    ]
+
     if password:
-        cmd += ["password", password]
+        cmd += [
+            "wifi-sec.key-mgmt", "wpa-psk",
+            "password", password
+        ]
+
 
     rc, out, err = run(cmd, timeout=45)
     if rc != 0:
