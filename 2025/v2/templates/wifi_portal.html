@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PieSS Wi-Fi Setup</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; max-width: 680px; }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+    img { height: 64px; width: auto; }
+    .box { padding: 14px; border: 1px solid #ddd; border-radius: 10px; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, select { width: 100%; padding: 10px; margin-top: 6px; border-radius: 8px; border: 1px solid #ccc; }
+    button { margin-top: 16px; padding: 12px 14px; border: none; border-radius: 10px; cursor: pointer; }
+    .muted { color: #666; font-size: 0.95em; }
+    .warn { background: #fff3cd; border: 1px solid #ffe69c; padding: 10px; border-radius: 10px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/logo.png" alt="PieSS">
+    <div>
+      <h2 style="margin:0;">Connect PieSS to Wi-Fi</h2>
+      <div class="muted">Select your network and enter the password.</div>
+    </div>
+  </header>
+
+  <div class="box">
+    <p class="muted" style="margin-top:0;">
+      If you don’t see your network, press Refresh or type the SSID manually (hidden networks).
+    </p>
+
+    {% if scan_error %}
+      <div class="warn">
+        <b>Wi-Fi scan warning:</b> {{ scan_error }}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/connect">
+      <label for="ssid_select">Nearby networks</label>
+      <select id="ssid_select">
+        <option value="">— Select a network —</option>
+        {% for n in networks %}
+          <option value="{{ n.ssid }}">
+            {% if n.in_use %}✓ {% endif %}{{ n.ssid }} ({{ n.signal }}%) {{ n.security }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <label for="ssid">Wi-Fi name (SSID)</label>
+      <input id="ssid" name="ssid" placeholder="e.g., MyHomeWiFi" required>
+
+      <label for="password">Wi-Fi password</label>
+      <input id="password" name="password" type="password" placeholder="Enter password">
+
+      <button type="button" onclick="refreshScan()">Refresh list</button>
+      <button type="submit">Connect</button>
+    </form>
+  </div>
+
+  <script>
+    // When dropdown changes, fill SSID field automatically
+    document.getElementById("ssid_select").addEventListener("change", (e) => {
+      const ssid = e.target.value || "";
+      document.getElementById("ssid").value = ssid;
+    });
+
+    async function refreshScan() {
+      const sel = document.getElementById("ssid_select");
+      sel.innerHTML = '<option value="">Scanning…</option>';
+
+      const r = await fetch("/scan");
+      const j = await r.json();
+
+      if (!j.ok) {
+        sel.innerHTML = '<option value="">Scan failed</option>';
+        alert("Scan failed: " + (j.error || "unknown error"));
+        return;
+      }
+
+      sel.innerHTML = '<option value="">— Select a network —</option>';
+      for (const n of j.networks) {
+        const opt = document.createElement("option");
+        opt.value = n.ssid;
+        opt.textContent = (n.in_use ? "✓ " : "") + n.ssid + ` (${n.signal}%) ` + n.security;
+        sel.appendChild(opt);
+      }
+    }
+  </script>
+</body>
+</html>
