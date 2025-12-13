@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PieSS Wi-Fi Setup</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; max-width: 680px; }
+    img { height: 64px; width: auto; }
+    .box { padding: 14px; border: 1px solid #ddd; border-radius: 10px; }
+    pre { background: #f6f6f6; padding: 12px; border-radius: 10px; overflow-x: auto; }
+    .ok { background: #d1e7dd; border: 1px solid #a3cfbb; padding: 10px; border-radius: 10px; }
+    .bad { background: #f8d7da; border: 1px solid #f1aeb5; padding: 10px; border-radius: 10px; }
+    a { display: inline-block; margin-top: 14px; }
+  </style>
+</head>
+<body>
+
+  <img src="/logo.png" alt="PieSS">
+
+  <h2>Wi-Fi Connection Result</h2>
+
+  {% if ok %}
+    <div class="ok"><b>Success:</b> {{ message }}</div>
+  {% else %}
+    <div class="bad"><b>Failed:</b> {{ message }}</div>
+  {% endif %}
+
+  <h3>Network status</h3>
+  <pre>{{ status }}</pre>
+
+  <a href="/">Back</a>
+
+</body>
+</html>
