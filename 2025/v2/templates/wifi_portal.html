@@ -14,6 +14,7 @@
     button { margin-top: 16px; padding: 12px 14px; border: none; border-radius: 10px; cursor: pointer; }
     .muted { color: #666; font-size: 0.95em; }
     .warn { background: #fff3cd; border: 1px solid #ffe69c; padding: 10px; border-radius: 10px; margin-top: 12px; }
+    .info { background: #d1ecf1; border: 1px solid #bee5eb; padding: 10px; border-radius: 10px; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -27,8 +28,10 @@
 
   <div class="box">
     <p class="muted" style="margin-top:0;">
-      If you don’t see your network, press Refresh or type the SSID manually (hidden networks).
+      Press "Refresh list" to scan for nearby networks. Note: The WiFi will briefly disconnect during scan.
     </p>
+
+    <div id="status-message"></div>
 
     {% if scan_error %}
       <div class="warn">
@@ -39,7 +42,7 @@
     <form method="post" action="/connect">
       <label for="ssid_select">Nearby networks</label>
       <select id="ssid_select">
-        <option value="">— Select a network —</option>
+        <option value="">— Press Refresh to scan —</option>
         {% for n in networks %}
           <option value="{{ n.ssid }}">
             {% if n.in_use %}✓ {% endif %}{{ n.ssid }} ({{ n.signal }}%) {{ n.security }}
@@ -67,23 +70,54 @@
 
     async function refreshScan() {
       const sel = document.getElementById("ssid_select");
-      sel.innerHTML = '<option value="">Scanning…</option>';
+      const statusDiv = document.getElementById("status-message");
+      
+      sel.innerHTML = '<option value="">Scanning… (WiFi will reconnect)</option>';
+      statusDiv.innerHTML = '<div class="info"><b>Scanning for networks...</b><br>Your connection will briefly drop. Please wait and reconnect if needed.</div>';
 
-      const r = await fetch("/scan");
-      const j = await r.json();
+      try {
+        const r = await fetch("/scan");
+        
+        if (!r.ok) {
+          throw new Error(`HTTP error ${r.status}`);
+        }
+        
+        const j = await r.json();
+        
+        console.log("Scan response:", j); // Debug logging
 
-      if (!j.ok) {
-        sel.innerHTML = '<option value="">Scan failed</option>';
-        alert("Scan failed: " + (j.error || "unknown error"));
-        return;
-      }
+        if (!j.ok) {
+          sel.innerHTML = '<option value="">Scan failed</option>';
+          statusDiv.innerHTML = '<div class="warn"><b>Scan failed:</b> ' + (j.error || "unknown error") + '</div>';
+          return;
+        }
 
-      sel.innerHTML = '<option value="">— Select a network —</option>';
-      for (const n of j.networks) {
-        const opt = document.createElement("option");
-        opt.value = n.ssid;
-        opt.textContent = (n.in_use ? "✓ " : "") + n.ssid + ` (${n.signal}%) ` + n.security;
-        sel.appendChild(opt);
+        // Clear status message
+        statusDiv.innerHTML = '<div class="info"><b>Scan complete!</b> Found ' + j.networks.length + ' networks.</div>';
+        
+        // Populate dropdown
+        sel.innerHTML = '<option value="">— Select a network —</option>';
+        
+        if (j.networks.length === 0) {
+          sel.innerHTML += '<option value="" disabled>No networks found</option>';
+        }
+        
+        for (const n of j.networks) {
+          const opt = document.createElement("option");
+          opt.value = n.ssid;
+          opt.textContent = (n.in_use ? "✓ " : "") + n.ssid + ` (${n.signal}%) ` + n.security;
+          sel.appendChild(opt);
+        }
+        
+        // Clear status after 3 seconds
+        setTimeout(() => {
+          statusDiv.innerHTML = '';
+        }, 3000);
+        
+      } catch (err) {
+        console.error("Scan error:", err);
+        sel.innerHTML = '<option value="">Scan error - reconnect and retry</option>';
+        statusDiv.innerHTML = '<div class="warn"><b>Error:</b> ' + err.message + '<br>Please reconnect to PieSS-Setup WiFi and try again.</div>';
       }
     }
   </script>
