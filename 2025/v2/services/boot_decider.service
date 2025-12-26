@@ -1,0 +1,12 @@
+[Unit]
+Description=PieSS Boot Mode Decider
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/piess/PieSS/2025/v2/boot_decider.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

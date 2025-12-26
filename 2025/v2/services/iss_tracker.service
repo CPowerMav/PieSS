@@ -1,0 +1,15 @@
+[Unit]
+Description=ISS Tracker
+After=network-online.target pigpiod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=piess
+WorkingDirectory=/home/piess/PieSS/2025/v2
+ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/iss_tracker.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
