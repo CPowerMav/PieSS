@@ -166,25 +166,18 @@ def connect_to_network(ssid, password):
 
 @app.route("/")
 def index():
-    """Main portal page"""
-    try:
-        networks = scan_networks()
-        scan_error = None
-    except Exception as e:
-        print(f"[wifi_portal] Scan error: {e}")
-        networks = []
-        scan_error = str(e)
-    
+    """Main portal page - does NOT scan on load, just shows empty list"""
+    # Don't scan on initial page load - let user click Refresh button
     return render_template(
         "wifi_portal.html",
-        networks=networks,
-        scan_error=scan_error
+        networks=[],
+        scan_error=None
     )
 
 
 @app.route("/scan")
 def scan():
-    """AJAX endpoint for refreshing network list"""
+    """AJAX endpoint for refreshing network list - this is where scanning happens"""
     try:
         networks = scan_networks()
         return jsonify({"ok": True, "networks": networks})
@@ -226,4 +219,5 @@ def logo():
 
 if __name__ == "__main__":
     print(f"[wifi_portal] Starting on {APP_HOST}:{APP_PORT}")
+    print("[wifi_portal] Note: Network scanning only happens when 'Refresh' is clicked")
     app.run(host=APP_HOST, port=APP_PORT, debug=False)
