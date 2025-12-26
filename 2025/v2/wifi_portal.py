@@ -7,6 +7,7 @@ Handles network scanning and connection with proper AP mode management
 import os
 import subprocess
 import time
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_file
 
 APP_HOST = "0.0.0.0"
@@ -15,6 +16,13 @@ WIFI_IFACE = "wlan0"
 LOGO_PATH = "/home/piess/PieSS/2025/v2/templates/logo.png"
 
 app = Flask(__name__, template_folder="templates")
+
+# Cache for scan results
+scan_cache = {
+    'networks': [],
+    'timestamp': None,
+    'scanning': False
+}
 
 
 def run_cmd(cmd, timeout=30, check_sudo=False):
@@ -50,21 +58,36 @@ def stop_ap_mode():
 def start_ap_mode():
     """Restart AP mode"""
     print("[wifi_portal] Restarting AP mode...")
+    
+    # Make sure wlan0 still has the right IP
+    run_cmd(["ip", "addr", "add", "192.168.4.1/24", "dev", "wlan0"], check_sudo=True)
+    
     run_cmd(["systemctl", "start", "dnsmasq"], check_sudo=True)
+    time.sleep(1)
     run_cmd(["systemctl", "start", "hostapd"], check_sudo=True)
-    time.sleep(2)
+    time.sleep(3)
+    print("[wifi_portal] AP mode restarted")
 
 
-def scan_networks():
+def scan_networks_background():
     """
-    Scan for WiFi networks. Temporarily stops AP mode to scan.
-    Returns list of network dicts or raises exception.
+    Scan for WiFi networks in background. Updates the cache.
+    This is designed to be called and return immediately, doing work in background.
     """
+    global scan_cache
+    
+    if scan_cache['scanning']:
+        print("[wifi_portal] Scan already in progress, skipping")
+        return
+    
+    scan_cache['scanning'] = True
+    
     # Stop AP mode temporarily
     stop_ap_mode()
     
     try:
         # Request fresh scan
+        print("[wifi_portal] Running nmcli scan...")
         run_cmd(["nmcli", "dev", "wifi", "rescan"], timeout=20, check_sudo=True)
         time.sleep(3)
         
@@ -75,46 +98,53 @@ def scan_networks():
         ], check_sudo=True)
         
         if rc != 0:
-            raise RuntimeError(f"Network scan failed: {err or out}")
+            print(f"[wifi_portal] Scan failed: {err or out}")
+            scan_cache['networks'] = []
+        else:
+            networks = []
+            seen_ssids = set()
+            
+            for line in out.splitlines():
+                parts = line.split(":")
+                if len(parts) < 4:
+                    continue
+                
+                in_use = parts[0].strip() == "*"
+                ssid = parts[1].strip()
+                signal = parts[2].strip()
+                security = parts[3].strip()
+                
+                # Skip empty SSIDs and duplicates
+                if not ssid or ssid in seen_ssids:
+                    continue
+                
+                seen_ssids.add(ssid)
+                
+                try:
+                    signal_int = int(signal) if signal.isdigit() else 0
+                except:
+                    signal_int = 0
+                
+                networks.append({
+                    "ssid": ssid,
+                    "signal": signal_int,
+                    "security": security if security else "Open",
+                    "in_use": in_use
+                })
+            
+            # Sort by signal strength
+            networks.sort(key=lambda n: (-n["signal"], n["ssid"].lower()))
+            scan_cache['networks'] = networks
+            scan_cache['timestamp'] = datetime.now()
+            print(f"[wifi_portal] Scan complete, found {len(networks)} networks")
         
-        networks = []
-        seen_ssids = set()
-        
-        for line in out.splitlines():
-            parts = line.split(":")
-            if len(parts) < 4:
-                continue
-            
-            in_use = parts[0].strip() == "*"
-            ssid = parts[1].strip()
-            signal = parts[2].strip()
-            security = parts[3].strip()
-            
-            # Skip empty SSIDs and duplicates
-            if not ssid or ssid in seen_ssids:
-                continue
-            
-            seen_ssids.add(ssid)
-            
-            try:
-                signal_int = int(signal) if signal.isdigit() else 0
-            except:
-                signal_int = 0
-            
-            networks.append({
-                "ssid": ssid,
-                "signal": signal_int,
-                "security": security if security else "Open",
-                "in_use": in_use
-            })
-        
-        # Sort by signal strength
-        networks.sort(key=lambda n: (-n["signal"], n["ssid"].lower()))
-        return networks
-        
+    except Exception as e:
+        print(f"[wifi_portal] Scan error: {e}")
+        scan_cache['networks'] = []
     finally:
         # Always restart AP mode after scan
         start_ap_mode()
+        scan_cache['scanning'] = False
 
 
 def connect_to_network(ssid, password):
@@ -166,24 +196,54 @@ def connect_to_network(ssid, password):
 
 @app.route("/")
 def index():
-    """Main portal page - does NOT scan on load, just shows empty list"""
-    # Don't scan on initial page load - let user click Refresh button
+    """Main portal page - shows cached scan results if available"""
+    global scan_cache
+    
+    networks = scan_cache.get('networks', [])
+    scan_time = scan_cache.get('timestamp')
+    
+    scan_error = None
+    if scan_time:
+        age = (datetime.now() - scan_time).total_seconds()
+        if age > 300:  # Older than 5 minutes
+            scan_error = f"Scan results are {int(age/60)} minutes old. Press Refresh for current networks."
+    
     return render_template(
         "wifi_portal.html",
-        networks=[],
-        scan_error=None
+        networks=networks,
+        scan_error=scan_error
     )
 
 
 @app.route("/scan")
 def scan():
-    """AJAX endpoint for refreshing network list - this is where scanning happens"""
-    try:
-        networks = scan_networks()
-        return jsonify({"ok": True, "networks": networks})
-    except Exception as e:
-        print(f"[wifi_portal] Scan error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+    """Trigger a background scan and return current cached results"""
+    global scan_cache
+    
+    # Trigger scan in background (doesn't block)
+    import threading
+    scan_thread = threading.Thread(target=scan_networks_background)
+    scan_thread.daemon = True
+    scan_thread.start()
+    
+    # Return immediately with message
+    return jsonify({
+        "ok": True,
+        "scanning": True,
+        "message": "Scan started. AP will restart. Please reconnect and reload the page in 10 seconds."
+    })
+
+
+@app.route("/results")
+def results():
+    """Get current scan results from cache"""
+    global scan_cache
+    return jsonify({
+        "ok": True,
+        "networks": scan_cache.get('networks', []),
+        "scanning": scan_cache.get('scanning', False),
+        "timestamp": scan_cache.get('timestamp').isoformat() if scan_cache.get('timestamp') else None
+    })
 
 
 @app.route("/connect", methods=["POST"])
@@ -219,5 +279,10 @@ def logo():
 
 if __name__ == "__main__":
     print(f"[wifi_portal] Starting on {APP_HOST}:{APP_PORT}")
-    print("[wifi_portal] Note: Network scanning only happens when 'Refresh' is clicked")
+    print("[wifi_portal] Performing initial network scan...")
+    
+    # Do an initial scan on startup
+    scan_networks_background()
+    
+    print("[wifi_portal] Ready to accept connections")
     app.run(host=APP_HOST, port=APP_PORT, debug=False)

@@ -28,33 +28,37 @@
 
   <div class="box">
     <p class="muted" style="margin-top:0;">
-      Press "Refresh list" to scan for nearby networks. Note: The WiFi will briefly disconnect during scan.
+      Press "Refresh list" to scan for nearby networks. The WiFi will restart - please wait 10 seconds, reconnect, and reload this page.
     </p>
 
     <div id="status-message"></div>
 
     {% if scan_error %}
       <div class="warn">
-        <b>Wi-Fi scan warning:</b> {{ scan_error }}
+        <b>Note:</b> {{ scan_error }}
       </div>
     {% endif %}
 
     <form method="post" action="/connect">
-      <label for="ssid_select">Nearby networks</label>
+      <label for="ssid_select">Nearby networks ({{ networks|length }} found)</label>
       <select id="ssid_select">
-        <option value="">— Press Refresh to scan —</option>
-        {% for n in networks %}
-          <option value="{{ n.ssid }}">
-            {% if n.in_use %}✓ {% endif %}{{ n.ssid }} ({{ n.signal }}%) {{ n.security }}
-          </option>
-        {% endfor %}
+        {% if networks %}
+          <option value="">— Select a network —</option>
+          {% for n in networks %}
+            <option value="{{ n.ssid }}">
+              {% if n.in_use %}✓ {% endif %}{{ n.ssid }} ({{ n.signal }}%) {{ n.security }}
+            </option>
+          {% endfor %}
+        {% else %}
+          <option value="">— No networks scanned yet —</option>
+        {% endif %}
       </select>
 
       <label for="ssid">Wi-Fi name (SSID)</label>
       <input id="ssid" name="ssid" placeholder="e.g., MyHomeWiFi" required>
 
       <label for="password">Wi-Fi password</label>
-      <input id="password" name="password" type="password" placeholder="Enter password">
+      <input id="password" name="password" type="password" placeholder="Enter password (leave empty for open networks)">
 
       <button type="button" onclick="refreshScan()">Refresh list</button>
       <button type="submit">Connect</button>
@@ -69,55 +73,45 @@
     });
 
     async function refreshScan() {
-      const sel = document.getElementById("ssid_select");
       const statusDiv = document.getElementById("status-message");
       
-      sel.innerHTML = '<option value="">Scanning… (WiFi will reconnect)</option>';
-      statusDiv.innerHTML = '<div class="info"><b>Scanning for networks...</b><br>Your connection will briefly drop. Please wait and reconnect if needed.</div>';
+      statusDiv.innerHTML = `
+        <div class="info">
+          <b>⏳ Starting scan...</b><br>
+          The WiFi access point will restart. Please:<br>
+          1. Wait 10 seconds<br>
+          2. Reconnect to "PieSS-Setup"<br>
+          3. Reload this page to see results
+        </div>
+      `;
 
       try {
         const r = await fetch("/scan");
-        
-        if (!r.ok) {
-          throw new Error(`HTTP error ${r.status}`);
-        }
-        
         const j = await r.json();
         
-        console.log("Scan response:", j); // Debug logging
-
-        if (!j.ok) {
-          sel.innerHTML = '<option value="">Scan failed</option>';
-          statusDiv.innerHTML = '<div class="warn"><b>Scan failed:</b> ' + (j.error || "unknown error") + '</div>';
-          return;
+        if (j.ok) {
+          statusDiv.innerHTML = `
+            <div class="info">
+              <b>✓ Scan started!</b><br>
+              Please wait 10 seconds, reconnect to PieSS-Setup, then reload this page.
+            </div>
+          `;
+        } else {
+          statusDiv.innerHTML = `
+            <div class="warn">
+              <b>Scan failed:</b> ${j.message || 'Unknown error'}
+            </div>
+          `;
         }
-
-        // Clear status message
-        statusDiv.innerHTML = '<div class="info"><b>Scan complete!</b> Found ' + j.networks.length + ' networks.</div>';
-        
-        // Populate dropdown
-        sel.innerHTML = '<option value="">— Select a network —</option>';
-        
-        if (j.networks.length === 0) {
-          sel.innerHTML += '<option value="" disabled>No networks found</option>';
-        }
-        
-        for (const n of j.networks) {
-          const opt = document.createElement("option");
-          opt.value = n.ssid;
-          opt.textContent = (n.in_use ? "✓ " : "") + n.ssid + ` (${n.signal}%) ` + n.security;
-          sel.appendChild(opt);
-        }
-        
-        // Clear status after 3 seconds
-        setTimeout(() => {
-          statusDiv.innerHTML = '';
-        }, 3000);
-        
       } catch (err) {
-        console.error("Scan error:", err);
-        sel.innerHTML = '<option value="">Scan error - reconnect and retry</option>';
-        statusDiv.innerHTML = '<div class="warn"><b>Error:</b> ' + err.message + '<br>Please reconnect to PieSS-Setup WiFi and try again.</div>';
+        // This is expected - the connection drops during scan
+        statusDiv.innerHTML = `
+          <div class="info">
+            <b>✓ Scan in progress!</b><br>
+            Connection dropped (this is normal).<br>
+            Please reconnect to PieSS-Setup and reload this page in 10 seconds.
+          </div>
+        `;
       }
     }
   </script>
