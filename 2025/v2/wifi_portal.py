@@ -279,10 +279,13 @@ def logo():
 
 if __name__ == "__main__":
     print(f"[wifi_portal] Starting on {APP_HOST}:{APP_PORT}")
-    print("[wifi_portal] Performing initial network scan...")
     
-    # Do an initial scan on startup
-    scan_networks_background()
+    # Only do initial scan if AP services are already running
+    # (This prevents stopping AP during boot)
+    rc, _, _ = run_cmd(["systemctl", "is-active", "hostapd"])
+    if rc == 0:
+        print("[wifi_portal] AP already running, skipping initial scan")
+        print("[wifi_portal] Users can press 'Refresh' button to scan")
     
     print("[wifi_portal] Ready to accept connections")
     app.run(host=APP_HOST, port=APP_PORT, debug=False)
