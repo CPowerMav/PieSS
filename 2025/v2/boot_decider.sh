@@ -43,18 +43,34 @@ else
     # Enable WiFi radio
     nmcli radio wifi on
     
-    # Configure wlan0 for AP mode
+    # Configure wlan0 for AP mode - MUST happen before starting services
+    echo "[boot_decider] Configuring wlan0 interface..."
+    ip link set wlan0 down 2>/dev/null || true
     ip addr flush dev wlan0 2>/dev/null || true
-    ip addr add 192.168.4.1/24 dev wlan0 2>/dev/null || true
+    ip addr add 192.168.4.1/24 dev wlan0
     ip link set wlan0 up
     
-    # Start AP services
+    # Verify IP is set
+    sleep 1
+    WLAN0_IP=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    echo "[boot_decider] wlan0 IP address: $WLAN0_IP"
+    
+    if [[ "$WLAN0_IP" != "192.168.4.1" ]]; then
+        echo "[boot_decider] WARNING: wlan0 IP not set correctly!"
+    fi
+    
+    # Start dnsmasq first (needs IP to be set)
+    echo "[boot_decider] Starting dnsmasq..."
     systemctl start dnsmasq
     sleep 2
+    
+    # Then start hostapd
+    echo "[boot_decider] Starting hostapd..."
     systemctl start hostapd
     sleep 2
     
-    # Start web portal
+    # Finally start web portal
+    echo "[boot_decider] Starting wifi_portal..."
     systemctl start wifi_portal
     
     echo "[boot_decider] WiFi portal started at http://192.168.4.1:8080"
