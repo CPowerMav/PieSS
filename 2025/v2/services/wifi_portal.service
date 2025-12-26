@@ -1,0 +1,17 @@
+[Unit]
+Description=PieSS WiFi Configuration Portal
+After=network.target hostapd.service dnsmasq.service
+Requires=hostapd.service dnsmasq.service
+
+[Service]
+Type=simple
+User=piess
+WorkingDirectory=/home/piess/PieSS/2025/v2
+ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/wifi_portal.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/piess-portal.log
+StandardError=append:/var/log/piess-portal.log
+
+[Install]
+WantedBy=multi-user.target
