@@ -19,6 +19,7 @@ import requests
 import pigpio
 from gpiozero import LED
 from skyfield.api import Topos, load
+from skyfield import almanac
 
 # ----------------------------
 # CONFIGURATION
@@ -259,17 +260,62 @@ def get_satellite_data():
     return by_name['ISS (ZARYA)'], ts
 
 
-def is_location_dark(observer_topos: Topos, time_t, ephemeris) -> bool:
-    """Check if it is night-time at the observer's location.
-
-    Returns True if the sun is below MAX_SUN_ELEVATION.
+def get_sunrise_sunset(observer_topos: Topos, date_t, ephemeris):
     """
-    sun = ephemeris['sun']
+    Calculate sunrise and sunset times for a given date.
+    Returns (sunrise_time, sunset_time) as Skyfield Time objects.
+    """
+    ts = ephemeris.timescale
     earth = ephemeris['earth']
+    sun = ephemeris['sun']
     observer = earth + observer_topos
+    
+    # Start at midnight of the given date
+    dt = date_t.utc_datetime().replace(hour=0, minute=0, second=0, microsecond=0)
+    t0 = ts.from_datetime(dt)
+    t1 = ts.from_datetime(dt + timedelta(days=1))
+    
+    # Find sunrise/sunset events
+    times, events = almanac.find_discrete(t0, t1, almanac.sunrise_sunset(ephemeris, observer_topos))
+    
+    sunrise = None
+    sunset = None
+    
+    for t, is_sunrise in zip(times, events):
+        if is_sunrise:
+            sunrise = t
+        else:
+            sunset = t
+    
+    return sunrise, sunset
 
-    alt, _, _ = observer.at(time_t).observe(sun).apparent().altaz()
-    return alt.degrees < MAX_SUN_ELEVATION
+
+def is_visible_at_night(observer_topos: Topos, pass_time_t, ephemeris) -> bool:
+    """
+    Check if a pass occurs during night time (between sunset and sunrise).
+    Also checks that the ISS is illuminated by the sun (for visibility).
+    """
+    # Get sunrise and sunset for the pass date
+    sunrise, sunset = get_sunrise_sunset(observer_topos, pass_time_t, ephemeris)
+    
+    if sunrise is None or sunset is None:
+        # Fallback to old method if we can't calculate sunrise/sunset
+        sun = ephemeris['sun']
+        earth = ephemeris['earth']
+        observer = earth + observer_topos
+        alt, _, _ = observer.at(pass_time_t).observe(sun).apparent().altaz()
+        return alt.degrees < MAX_SUN_ELEVATION
+    
+    pass_datetime = pass_time_t.utc_datetime()
+    
+    # Handle case where sunset is before sunrise (normal night)
+    if sunset.utc_datetime() < sunrise.utc_datetime():
+        is_night = pass_datetime >= sunset.utc_datetime() or pass_datetime <= sunrise.utc_datetime()
+    else:
+        # Handle case crossing midnight
+        is_night = pass_datetime >= sunset.utc_datetime() and pass_datetime <= sunrise.utc_datetime()
+    
+    return is_night
 
 
 # ----------------------------
@@ -320,7 +366,7 @@ def main() -> None:
                 rise_t, peak_t, set_t = times[i], times[i + 1], times[i + 2]
 
                 # Skip if peak occurs during daylight
-                if not is_location_dark(observer_location, peak_t, eph):
+                if not is_visible_at_night(observer_location, peak_t, eph):
                     print(f"Skipping pass at {rise_t.utc_iso()} (daylight)")
                     continue
 
