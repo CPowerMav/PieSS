@@ -63,24 +63,24 @@ def main():
     try:
         cycle = 1
         while True:
-            print(f"\n--- Test Cycle {cycle} ---")
+            print("\n--- Test Cycle {} ---".format(cycle))
             
             for name, led, servo_pos in test_items:
-                print(f"Testing: {name}... ", end="", flush=True)
+                print("Testing: {}... ".format(name), end="", flush=True)
                 
                 if led is not None:
                     # Test LED
                     led.on()
                     time.sleep(LED_DURATION)
                     led.off()
-                    print("✓")
+                    print("OK")
                     
                 elif servo_pos is not None:
                     # Test servo
                     pi.set_servo_pulsewidth(SERVO_PIN, servo_pos)
                     time.sleep(SERVO_DURATION)
                     pi.set_servo_pulsewidth(SERVO_PIN, 0)  # Release torque
-                    print("✓")
+                    print("OK")
                 
                 time.sleep(0.3)  # Small gap between tests
             
