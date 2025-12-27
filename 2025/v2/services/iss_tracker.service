@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=piess
 WorkingDirectory=/home/piess/PieSS/2025/v2
-ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/iss_tracker.py
+ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 -u /home/piess/PieSS/2025/v2/iss_tracker.py
 Restart=always
 RestartSec=10
 
