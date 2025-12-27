@@ -119,6 +119,54 @@ def update_direction_leds(azimuth: float) -> None:
     elif 225 <= azimuth < 315:
         led_w.on()
 
+
+def test_hardware():
+    """Run a quick hardware test on startup to verify all components"""
+    print("Running hardware self-test...")
+    
+    # Test sequence - same order as hardware_test.py
+    test_items = [
+        ("North", led_n),
+        ("West", led_w),
+        ("South", led_s),
+        ("East", led_e),
+        ("10-min", led_10m),
+        ("5-min", led_5m),
+        ("1-min", led_1m),
+    ]
+    
+    # Test LEDs
+    for name, led in test_items:
+        print(f"  Testing {name} LED... ", end="", flush=True)
+        led.on()
+        time.sleep(0.5)
+        led.off()
+        print("OK")
+        time.sleep(0.2)
+    
+    # Test servo
+    print("  Testing servo UP... ", end="", flush=True)
+    set_servo(SERVO_UP, hold_torque=False)
+    time.sleep(1)
+    print("OK")
+    
+    print("  Testing servo DOWN... ", end="", flush=True)
+    set_servo(SERVO_DOWN, hold_torque=False)
+    time.sleep(1)
+    print("OK")
+    
+    print("  Testing servo UP... ", end="", flush=True)
+    set_servo(SERVO_UP, hold_torque=False)
+    time.sleep(1)
+    print("OK")
+    
+    print("  Testing servo DOWN... ", end="", flush=True)
+    set_servo(SERVO_DOWN, hold_torque=False)
+    time.sleep(1)
+    print("OK")
+    
+    print("Hardware self-test complete!\n")
+
 def get_location():
     """Detect geographical location via IP geolocation.
 
@@ -241,6 +289,9 @@ def main() -> None:
     # Reset LEDs and servo
     reset_leds()
     set_servo(SERVO_DOWN, hold_torque=False)
+
+    # Run through hardware test once
+    test_hardware()
 
     while True:
         try:
