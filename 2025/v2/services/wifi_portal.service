@@ -1,7 +1,7 @@
 [Unit]
 Description=PieSS WiFi Configuration Portal
-After=network.target hostapd.service dnsmasq.service
-Requires=hostapd.service dnsmasq.service
+After=network.target
+# Don't use Requires - we need to be able to stop/start hostapd/dnsmasq independently
 
 [Service]
 Type=simple
