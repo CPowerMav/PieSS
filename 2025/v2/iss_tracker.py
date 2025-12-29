@@ -4,9 +4,9 @@ Main program for tracking the ISS and raising a flag with LEDs and a servo.
 
 Features:
 - Automatic IP-based location detection
-- Night-time only alerts
+- Night-time only alerts (based on sunrise/sunset)
 - Direction LEDs
-- LED alerts for 10, 5, 1 minute warnings
+- Progressive LED alerts with accelerating blink patterns
 - Servo movement with torque hold
 - Automatic TLE caching
 """
@@ -32,12 +32,11 @@ TLE_REFRESH_HOURS = 12  # Refresh TLE data every 12 hours
 
 # Visibility filters
 MIN_ELEVATION = 15.0     # Minimum degrees above horizon
-MAX_SUN_ELEVATION = -6.0 # Sun must be below -6° (civil twilight)
 
-# Alert timings (seconds)
-ALERT_1_SEC = 600  # 10 minutes
-ALERT_2_SEC = 300  # 5 minutes
-ALERT_3_SEC = 60   # 1 minute
+# Alert timings (seconds before rise)
+ALERT_30M = 1800  # 30 minutes
+ALERT_10M = 600   # 10 minutes
+ALERT_5M = 300    # 5 minutes
 
 # Servo GPIO configuration
 SERVO_PIN = 16
@@ -45,9 +44,9 @@ SERVO_UP = 530
 SERVO_DOWN = 1530
 
 # LED GPIO pins
-LED_10M_PIN = 22  # Red: 10-minute alert
-LED_5M_PIN = 27   # Yellow: 5-minute alert
-LED_1M_PIN = 17   # Green: 1-minute alert
+LED_30M_PIN = 22  # Red: 30-minute alert
+LED_10M_PIN = 27  # Yellow: 10-minute alert
+LED_5M_PIN = 17   # Green: 5-minute alert
 
 LED_N_PIN = 5     # North direction
 LED_E_PIN = 6     # East direction
@@ -64,9 +63,9 @@ if not pi.connected:
     raise RuntimeError("Could not connect to pigpio. Run 'sudo pigpiod'.")
 
 # Initialize LEDs
+led_30m = LED(LED_30M_PIN)
 led_10m = LED(LED_10M_PIN)
 led_5m = LED(LED_5M_PIN)
-led_1m = LED(LED_1M_PIN)
 
 led_n = LED(LED_N_PIN)
 led_e = LED(LED_E_PIN)
@@ -92,9 +91,9 @@ def set_servo(position: int, hold_torque: bool = True) -> None:
 
 def reset_leds() -> None:
     """Turn off all LEDs."""
+    led_30m.off()
     led_10m.off()
     led_5m.off()
-    led_1m.off()
     led_n.off()
     led_e.off()
     led_s.off()
@@ -125,15 +124,15 @@ def test_hardware():
     """Run a quick hardware test on startup to verify all components"""
     print("Running hardware self-test...")
     
-    # Test sequence - same order as hardware_test.py
+    # Test sequence
     test_items = [
         ("North", led_n),
         ("West", led_w),
         ("South", led_s),
         ("East", led_e),
+        ("30-min", led_30m),
         ("10-min", led_10m),
         ("5-min", led_5m),
-        ("1-min", led_1m),
     ]
     
     # Test LEDs
@@ -156,17 +155,43 @@ def test_hardware():
     time.sleep(1)
     print("OK")
     
-    print("  Testing servo UP... ", end="", flush=True)
-    set_servo(SERVO_UP, hold_torque=False)
-    time.sleep(1)
-    print("OK")
-    
-    print("  Testing servo DOWN... ", end="", flush=True)
-    set_servo(SERVO_DOWN, hold_torque=False)
-    time.sleep(1)
-    print("OK")
-    
     print("Hardware self-test complete!\n")
+
+
+def blink_led(led, duration: float, blink_rate: float, check_interval: float = 0.1):
+    """
+    Blink an LED for a specified duration at a given rate.
+    
+    Args:
+        led: LED object to blink
+        duration: How long to blink (seconds)
+        blink_rate: Time for one complete on/off cycle (seconds)
+        check_interval: How often to check timing (seconds)
+    """
+    start_time = time.time()
+    on_time = blink_rate / 2
+    off_time = blink_rate / 2
+    
+    led_state = False
+    last_toggle = start_time
+    
+    while (time.time() - start_time) < duration:
+        current_time = time.time()
+        elapsed_since_toggle = current_time - last_toggle
+        
+        if led_state and elapsed_since_toggle >= on_time:
+            led.off()
+            led_state = False
+            last_toggle = current_time
+        elif not led_state and elapsed_since_toggle >= off_time:
+            led.on()
+            led_state = True
+            last_toggle = current_time
+        
+        time.sleep(check_interval)
+    
+    led.off()
+
 
 def get_location():
     """Detect geographical location via IP geolocation.
@@ -267,7 +292,6 @@ def get_sunrise_sunset(observer_topos: Topos, date_t, ephemeris):
     """
     ts = ephemeris.timescale
     earth = ephemeris['earth']
-    sun = ephemeris['sun']
     observer = earth + observer_topos
     
     # Start at midnight of the given date
@@ -293,27 +317,29 @@ def get_sunrise_sunset(observer_topos: Topos, date_t, ephemeris):
 def is_visible_at_night(observer_topos: Topos, pass_time_t, ephemeris) -> bool:
     """
     Check if a pass occurs during night time (between sunset and sunrise).
-    Also checks that the ISS is illuminated by the sun (for visibility).
     """
     # Get sunrise and sunset for the pass date
     sunrise, sunset = get_sunrise_sunset(observer_topos, pass_time_t, ephemeris)
     
     if sunrise is None or sunset is None:
-        # Fallback to old method if we can't calculate sunrise/sunset
+        # Fallback to elevation check if we can't calculate sunrise/sunset
         sun = ephemeris['sun']
         earth = ephemeris['earth']
         observer = earth + observer_topos
         alt, _, _ = observer.at(pass_time_t).observe(sun).apparent().altaz()
-        return alt.degrees < MAX_SUN_ELEVATION
+        return alt.degrees < -6.0  # Civil twilight
     
     pass_datetime = pass_time_t.utc_datetime()
+    sunset_dt = sunset.utc_datetime()
+    sunrise_dt = sunrise.utc_datetime()
     
-    # Handle case where sunset is before sunrise (normal night)
-    if sunset.utc_datetime() < sunrise.utc_datetime():
-        is_night = pass_datetime >= sunset.utc_datetime() or pass_datetime <= sunrise.utc_datetime()
+    # Check if pass is between sunset and sunrise
+    if sunset_dt < sunrise_dt:
+        # Normal case: sunset is before sunrise (e.g., sunset at 5pm, sunrise at 7am next day)
+        is_night = pass_datetime >= sunset_dt or pass_datetime <= sunrise_dt
     else:
-        # Handle case crossing midnight
-        is_night = pass_datetime >= sunset.utc_datetime() and pass_datetime <= sunrise.utc_datetime()
+        # Unusual case: crossing date boundary differently
+        is_night = pass_datetime >= sunset_dt and pass_datetime <= sunrise_dt
     
     return is_night
 
@@ -335,8 +361,8 @@ def main() -> None:
     # Reset LEDs and servo
     reset_leds()
     set_servo(SERVO_DOWN, hold_torque=False)
-
-    # Run through hardware test once
+    
+    # Run hardware test
     test_hardware()
 
     while True:
@@ -384,16 +410,12 @@ def main() -> None:
                     f"starts in {seconds_to_rise/60:.1f} minutes"
                 )
 
-                # Sleep until 12 minutes before rise (gives time for LEDs to step up)
-                time_to_wait = seconds_to_rise - 720
+                # Sleep until 32 minutes before rise (gives time for LEDs to start)
+                time_to_wait = seconds_to_rise - 1920  # 32 minutes
                 if time_to_wait > 0:
                     time.sleep(time_to_wait)
 
-                # Track alerts
-                alert1_fired = False
-                alert2_fired = False
-                alert3_fired = False
-
+                # Progressive countdown with accelerating blink patterns
                 while True:
                     now = ts.now().utc_datetime()
                     remaining = (rise_dt - now).total_seconds()
@@ -402,32 +424,66 @@ def main() -> None:
                         # Pass is over
                         break
 
-                    # Alerts
-                    if ALERT_1_SEC >= remaining > ALERT_2_SEC and not alert1_fired:
-                        print("10-minute alert")
-                        led_10m.on()
-                        alert1_fired = True
+                    # 30-10 minute countdown (Red LED with progressive blinking)
+                    if remaining > ALERT_10M:
+                        if remaining > 1500:  # 25-30 min
+                            print("30-minute alert (very slow blink)")
+                            blink_led(led_30m, min(300, remaining - 1500), 4.0)
+                        elif remaining > 1200:  # 20-25 min
+                            print("25-minute alert (slow blink)")
+                            blink_led(led_30m, min(300, remaining - 1200), 3.0)
+                        elif remaining > 900:  # 15-20 min
+                            print("20-minute alert (medium blink)")
+                            blink_led(led_30m, min(300, remaining - 900), 2.0)
+                        elif remaining > ALERT_10M:  # 10-15 min
+                            print("15-minute alert (fast blink)")
+                            blink_led(led_30m, min(300, remaining - ALERT_10M), 1.0)
 
-                    elif ALERT_2_SEC >= remaining > ALERT_3_SEC and not alert2_fired:
-                        print("5-minute alert")
+                    # 10-5 minute countdown (Yellow LED with progressive blinking)
+                    elif remaining > ALERT_5M:
+                        led_30m.off()
+                        if remaining > 480:  # 8-10 min
+                            print("10-minute alert (slow blink)")
+                            blink_led(led_10m, min(120, remaining - 480), 3.0)
+                        elif remaining > 360:  # 6-8 min
+                            print("8-minute alert (medium blink)")
+                            blink_led(led_10m, min(120, remaining - 360), 2.0)
+                        elif remaining > ALERT_5M:  # 5-6 min
+                            print("6-minute alert (fast blink)")
+                            blink_led(led_10m, min(60, remaining - ALERT_5M), 1.0)
+
+                    # 5-0 minute countdown (Green LED with progressive blinking)
+                    elif remaining > 0:
                         led_10m.off()
-                        led_5m.on()
-                        alert2_fired = True
+                        if remaining > 180:  # 3-5 min
+                            print("5-minute alert (medium blink)")
+                            blink_led(led_5m, min(120, remaining - 180), 2.0)
+                        elif remaining > 60:  # 1-3 min
+                            print("3-minute alert (fast blink)")
+                            blink_led(led_5m, min(120, remaining - 60), 1.0)
+                        elif remaining > 0:  # 0-1 min
+                            print("1-minute alert (rapid blink, raising flag)")
+                            set_servo(SERVO_UP, hold_torque=True)
+                            blink_led(led_5m, remaining, 0.5)
+                            break
 
-                    elif ALERT_3_SEC >= remaining > 0 and not alert3_fired:
-                        print("1-minute alert (raising flag)")
-                        led_5m.off()
-                        led_1m.on()
-                        set_servo(SERVO_UP, hold_torque=True)
-                        alert3_fired = True
+                    time.sleep(0.5)
 
-                    # Direction LEDs in the last minute before rise
-                    if remaining < 60:
-                        difference = iss - observer_location
-                        alt, az, _ = difference.at(ts.now()).altaz()
-                        if alt.degrees > 0:
-                            update_direction_leds(az.degrees)
-
+                # During the pass - only show directional LEDs
+                led_5m.off()
+                print("Pass in progress - showing direction")
+                
+                while True:
+                    now = ts.now().utc_datetime()
+                    if now > set_dt:
+                        break
+                    
+                    difference = iss - observer_location
+                    alt, az, _ = difference.at(ts.now()).altaz()
+                    
+                    if alt.degrees > 0:
+                        update_direction_leds(az.degrees)
+                    
                     time.sleep(0.5)
 
                 # Reset hardware after pass
