@@ -147,6 +147,18 @@ def scan_networks_background():
         scan_cache['scanning'] = False
 
 
+def stop_ap_led_indicator():
+    """Stop the AP mode LED indicator by killing the background process"""
+    try:
+        with open('/tmp/piess_ap_led.pid', 'r') as f:
+            pid = int(f.read().strip())
+        run_cmd(["kill", str(pid)], check_sudo=True)
+        run_cmd(["rm", "-f", "/tmp/piess_ap_led.pid"], check_sudo=True)
+        print("[wifi_portal] Stopped AP mode LED indicator")
+    except:
+        pass  # PID file might not exist
+
+
 def connect_to_network(ssid, password):
     """
     Connect to a WiFi network and shut down AP mode if successful.
@@ -184,6 +196,8 @@ def connect_to_network(ssid, password):
     
     if connected:
         print(f"[wifi_portal] Successfully connected to '{ssid}'")
+        # Stop the AP mode LED indicator
+        stop_ap_led_indicator()
         # Keep AP mode off - we're now a client
         return True, f"Successfully connected to {ssid}"
     else:

@@ -11,6 +11,32 @@ fi
 
 echo "[boot_decider] Starting boot decision process..."
 
+# LED GPIO pins
+LED_30M_PIN=22  # Red LED
+LED_W_PIN=12    # West LED (for AP mode indicator)
+
+# Function to control GPIO
+gpio_export() {
+    local pin=$1
+    if [ ! -d /sys/class/gpio/gpio$pin ]; then
+        echo $pin > /sys/class/gpio/export 2>/dev/null || true
+        sleep 0.1
+    fi
+    echo out > /sys/class/gpio/gpio$pin/direction 2>/dev/null || true
+}
+
+gpio_set() {
+    local pin=$1
+    local value=$2
+    echo $value > /sys/class/gpio/gpio$pin/value 2>/dev/null || true
+}
+
+gpio_cleanup() {
+    local pin=$1
+    gpio_set $pin 0
+    echo $pin > /sys/class/gpio/unexport 2>/dev/null || true
+}
+
 # Give NetworkManager time to initialize and attempt connections
 echo "[boot_decider] Waiting for NetworkManager to settle (20s)..."
 sleep 20
@@ -30,6 +56,10 @@ if [[ "$CONNECTIVITY" == "full" || "$CONNECTIVITY" == "limited" ]]; then
     systemctl stop hostapd 2>/dev/null || true
     systemctl stop dnsmasq 2>/dev/null || true
     systemctl stop wifi_portal 2>/dev/null || true
+    
+    # Make sure AP mode indicator LED is off
+    gpio_export $LED_W_PIN
+    gpio_cleanup $LED_W_PIN
     
     # Start ISS tracker
     systemctl start iss_tracker.service
@@ -74,6 +104,38 @@ else
     systemctl start wifi_portal
     
     echo "[boot_decider] WiFi portal started at http://192.168.4.1:8080"
+    
+    # Start AP mode indicator LED (blinking red West LED)
+    echo "[boot_decider] Starting AP mode LED indicator..."
+    gpio_export $LED_30M_PIN
+    gpio_export $LED_W_PIN
+    
+    # Create LED blink script in background
+    (
+        while true; do
+            # Check if we're still in AP mode (hostapd running)
+            if ! systemctl is-active --quiet hostapd; then
+                # AP mode ended, turn off LED and exit
+                gpio_cleanup $LED_30M_PIN
+                gpio_cleanup $LED_W_PIN
+                exit 0
+            fi
+            
+            # Blink pattern: Red LED on West position
+            # 0.5 seconds on, 0.5 seconds off = urgent indication
+            gpio_set $LED_30M_PIN 1  # Red LED on
+            gpio_set $LED_W_PIN 0
+            sleep 0.5
+            
+            gpio_set $LED_30M_PIN 0  # Red LED off
+            sleep 0.5
+        done
+    ) &
+    
+    # Store the background process PID
+    LED_BLINK_PID=$!
+    echo $LED_BLINK_PID > /tmp/piess_ap_led.pid
+    echo "[boot_decider] AP mode LED indicator started (PID: $LED_BLINK_PID)"
 fi
 
 echo "[boot_decider] Boot decision complete"
