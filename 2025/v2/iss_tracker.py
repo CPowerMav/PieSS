@@ -285,12 +285,17 @@ def get_satellite_data():
     return by_name['ISS (ZARYA)'], ts
 
 
-def get_sunrise_sunset(observer_topos: Topos, date_t, ephemeris):
+def get_sunrise_sunset(observer_topos: Topos, date_t, ts, ephemeris):
     """
     Calculate sunrise and sunset times for a given date.
     Returns (sunrise_time, sunset_time) as Skyfield Time objects.
+    
+    Args:
+        observer_topos: Observer's location
+        date_t: Skyfield Time object for the date
+        ts: Skyfield timescale
+        ephemeris: Ephemeris data
     """
-    ts = ephemeris.timescale
     earth = ephemeris['earth']
     observer = earth + observer_topos
     
@@ -314,12 +319,18 @@ def get_sunrise_sunset(observer_topos: Topos, date_t, ephemeris):
     return sunrise, sunset
 
 
-def is_visible_at_night(observer_topos: Topos, pass_time_t, ephemeris) -> bool:
+def is_visible_at_night(observer_topos: Topos, pass_time_t, ts, ephemeris) -> bool:
     """
     Check if a pass occurs during night time (between sunset and sunrise).
+    
+    Args:
+        observer_topos: Observer's location
+        pass_time_t: Skyfield Time object for the pass
+        ts: Skyfield timescale
+        ephemeris: Ephemeris data
     """
     # Get sunrise and sunset for the pass date
-    sunrise, sunset = get_sunrise_sunset(observer_topos, pass_time_t, ephemeris)
+    sunrise, sunset = get_sunrise_sunset(observer_topos, pass_time_t, ts, ephemeris)
     
     if sunrise is None or sunset is None:
         # Fallback to elevation check if we can't calculate sunrise/sunset
@@ -392,7 +403,7 @@ def main() -> None:
                 rise_t, peak_t, set_t = times[i], times[i + 1], times[i + 2]
 
                 # Skip if peak occurs during daylight
-                if not is_visible_at_night(observer_location, peak_t, eph):
+                if not is_visible_at_night(observer_location, peak_t, ts, eph):
                     print(f"Skipping pass at {rise_t.utc_iso()} (daylight)")
                     continue
 
