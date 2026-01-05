@@ -1,21 +1,4 @@
-### LED Status Indicators
-
-PieSS uses LEDs to indicate system status in addition to ISS tracking:
-
-#### Access Point Mode Indicator
-When PieSS cannot connect to WiFi and enters AP configuration mode:
-- **Red 30-minute alert LED blinks** (GPIO 22)
-- Pattern: 0.5 seconds on, 0.5 seconds off
-- Indicates: System needs WiFi configuration
-- Automatically stops when successfully connected to WiFi
-
-#### Network Scanning Animation
-When scanning for WiFi networks from the configuration portal:
-- **Circular LED animation**: North -> East -> South -> West
-- Each LED illuminates for 0.125 seconds
-- Pattern repeats for duration of scan (~8 seconds)
-- Creates a "radar scanning" visual effect
-- Indicates: Active network scan in progress# PieSS - Complete Technical Documentation
+# PieSS - Complete Technical Documentation
 
 **Platform:** Raspberry Pi 3 Model B with Raspberry Pi OS (Trixie)
 
@@ -69,6 +52,25 @@ When no internet connectivity is available:
 - Hosts web configuration interface at 192.168.4.1:8080
 - Allows user to scan and connect to WiFi networks
 - Automatically switches to ISS Tracker mode once connected
+
+### LED Status Indicators
+
+PieSS uses LEDs to indicate system status in addition to ISS tracking:
+
+#### Access Point Mode Indicator
+When PieSS cannot connect to WiFi and enters AP configuration mode:
+- **Red 30-minute alert LED blinks** (GPIO 22)
+- Pattern: 0.5 seconds on, 0.5 seconds off
+- Indicates: System needs WiFi configuration
+- Automatically stops when successfully connected to WiFi
+
+#### Network Scanning Animation
+When scanning for WiFi networks from the configuration portal:
+- **Circular LED animation**: North -> East -> South -> West
+- Each LED illuminates for 0.125 seconds
+- Pattern repeats for duration of scan (~8 seconds)
+- Creates a "radar scanning" visual effect
+- Indicates: Active network scan in progress
 
 ---
 
@@ -198,7 +200,6 @@ boot_decider.service
 ```
 Raspberry Pi 3B
 +-----------------------+
-|  3.3V  (Pin 1)        |---+
 |  5V    (Pin 2)        |---+-> Servo VCC (Red)
 |  GPIO5 (Pin 29)       |---+-> North LED -> 220 Ohm -> GND
 |  GPIO6 (Pin 31)       |---+-> East LED -> 220 Ohm -> GND
@@ -278,322 +279,193 @@ PieSS includes an automated installation script that handles the entire setup pr
 # 1. Clone the repository
 cd ~
 git clone https://github.com/CPowerMav/PieSS.git
+
+# 2. Navigate to v2 directory
 cd PieSS/2025/v2
 
-# 2. Make installer executable
-chmod +x piess_installer.sh
+# 3. Make installer executable
+chmod +x install_piess.sh
 
-# 3. Run the installer
-sudo ./piess_installer.sh
+# 4. Run the installer
+./install_piess.sh
 
-# 4. Follow prompts and reboot when finished
+# The installer will:
+# - Update system packages
+# - Install dependencies (Python, pigpio, hostapd, dnsmasq, NetworkManager)
+# - Create Python virtual environment
+# - Install Python packages
+# - Configure system services
+# - Set up sudo permissions
+# - Enable services to start on boot
+# - Display installation summary
+
+# 5. Reboot the system
+sudo reboot
 ```
 
 #### What the Installer Does
 
-The `piess_installer.sh` script automates all installation steps:
+The `install_piess.sh` script performs the following tasks:
 
-1. Updates system packages
-2. Installs dependencies (Python, pigpio, hostapd, dnsmasq)
-3. Verifies project structure and required files
-4. Creates Python virtual environment
-5. Installs Python packages (Flask, Skyfield, etc.)
-6. Configures pigpiod service
-7. Configures WiFi access point (hostapd)
-8. Configures DHCP server (dnsmasq)
-9. Sets up sudo permissions for piess user
-10. Installs systemd services (boot_decider, iss_tracker, wifi_portal)
-11. Creates log files with proper permissions
-12. Sets file permissions and ownership
-13. Enables services for automatic startup
-14. Configures boot to CLI mode
-15. Runs system verification checks
-16. Offers automatic reboot
+1. **System Updates**
+   ```bash
+   sudo apt update
+   sudo apt upgrade -y
+   ```
 
-**Installation time:** Approximately 5-10 minutes depending on internet speed.
+2. **Install Dependencies**
+   - Python 3 and pip
+   - pigpio (GPIO library)
+   - hostapd (WiFi Access Point)
+   - dnsmasq (DHCP server)
+   - NetworkManager (network management)
+   - git (version control)
 
-**Installation log:** Saved to `/var/log/piess-install.log`
+3. **Python Environment Setup**
+   - Creates virtual environment in `venv/`
+   - Installs packages from `requirements.txt`:
+     - skyfield (satellite tracking)
+     - pytz (timezone handling)
+     - requests (HTTP requests)
+     - flask (web server)
+     - pigpio (GPIO control)
 
-**Script location:** `/home/piess/PieSS/2025/v2/piess_installer.sh`
+4. **Service Configuration**
+   - Copies service files to `/etc/systemd/system/`
+   - Configures hostapd (WiFi AP settings)
+   - Configures dnsmasq (DHCP server)
+   - Sets up sudo permissions for the piess user
+
+5. **Service Enablement**
+   - Enables boot_decider.service
+   - Enables pigpiod.service
+   - Does not enable iss_tracker or wifi_portal (boot_decider manages these)
 
 ### Manual Installation
 
-For advanced users or custom setups, follow the detailed manual installation steps below.
+If you prefer to install manually or need to troubleshoot:
 
-### Manual Installation Steps
+#### 1. Install System Packages
 
-For manual installation without using the automated script:
-
-#### 1. System Update
 ```bash
+# Update package lists
 sudo apt update
 sudo apt upgrade -y
-```
 
-#### 2. Install System Dependencies
-```bash
+# Install required packages
 sudo apt install -y \
+    python3 \
     python3-pip \
     python3-venv \
     pigpio \
     hostapd \
     dnsmasq \
-    git \
-    nano
+    network-manager \
+    git
 ```
 
-#### 3. Configure pigpiod
+#### 2. Clone Repository
+
 ```bash
-# Create pigpiod service
-sudo nano /etc/systemd/system/pigpiod.service
-```
-
-Paste the following:
-```ini
-[Unit]
-Description=Pigpio daemon
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/pigpiod -l
-PIDFile=/var/run/pigpio.pid
-Type=forking
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
-```
-
-#### 4. Clone Repository
-```bash
-cd /home/piess
-git clone https://github.com/yourusername/PieSS.git
+cd ~
+git clone https://github.com/CPowerMav/PieSS.git
 cd PieSS/2025/v2
 ```
 
-#### 5. Create Python Virtual Environment
+#### 3. Create Virtual Environment
+
 ```bash
+# Create venv
 python3 -m venv venv
+
+# Activate venv
 source venv/bin/activate
+
+# Install Python packages
+pip install -r requirements.txt
 ```
 
-#### 6. Install Python Dependencies
+#### 4. Configure Services
+
 ```bash
-pip install --upgrade pip
-pip install flask skyfield requests pigpio gpiozero
-```
+# Copy service files
+sudo cp services/boot_decider.service /etc/systemd/system/
+sudo cp services/iss_tracker.service /etc/systemd/system/
+sudo cp services/wifi_portal.service /etc/systemd/system/
+sudo cp services/pigpiod.service /etc/systemd/system/
 
-Create requirements.txt:
-```bash
-cat > requirements.txt << EOF
-flask==3.0.0
-skyfield==1.48
-requests==2.31.0
-pigpio==1.78
-gpiozero==2.0.1
-EOF
-```
+# Copy configuration files
+sudo cp conf/hostapd.conf /etc/hostapd/hostapd.conf
+sudo cp conf/dnsmasq.conf /etc/dnsmasq.conf
 
-#### 7. Configure hostapd
+# Set up sudo permissions
+sudo bash conf/sudoers_config.sh
 
-Use the provided configuration file:
-```bash
-sudo cp ${PIESS_DIR}/conf/hostapd.conf /etc/hostapd/hostapd.conf
-sudo chmod 600 /etc/hostapd/hostapd.conf
-```
-
-Or create manually:
-```bash
-sudo nano /etc/hostapd/hostapd.conf
-```
-
-Paste:
-```ini
-interface=wlan0
-driver=nl80211
-ssid=PieSS-Setup
-hw_mode=g
-channel=6
-ieee80211n=1
-wmm_enabled=1
-auth_algs=1
-ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=christmas
-wpa_key_mgmt=WPA-PSK
-rsn_pairwise=CCMP
-```
-
-Set permissions:
-```bash
-sudo chmod 600 /etc/hostapd/hostapd.conf
-```
-
-#### 8. Configure dnsmasq
-
-Use the provided configuration file:
-```bash
-sudo cp ${PIESS_DIR}/conf/dnsmasq.conf /etc/dnsmasq.conf
-```
-
-Or edit manually:
-```bash
-sudo nano /etc/dnsmasq.conf
-```
-
-Add these lines:
-```ini
-interface=wlan0
-dhcp-range=192.168.4.10,192.168.4.50,255.255.255.0,12h
-domain-needed
-bogus-priv
-```
-
-#### 9. Configure Sudo Permissions
-
-Create sudoers file:
-```bash
-sudo visudo -f /etc/sudoers.d/piess-sudoers
-```
-
-Paste:
-```bash
-# Sudoers configuration for PieSS user
-# Allows piess user to manage network services without password
-
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl start hostapd
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop hostapd
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart hostapd
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl start dnsmasq
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop dnsmasq
-piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart dnsmasq
-piess ALL=(ALL) NOPASSWD: /usr/bin/nmcli
-piess ALL=(ALL) NOPASSWD: /usr/sbin/ip
-```
-
-Set permissions:
-```bash
-sudo chmod 0440 /etc/sudoers.d/piess-sudoers
-```
-
-#### 10. Install System Services
-
-Use the provided service files:
-```bash
-sudo cp ${PIESS_DIR}/services/boot_decider.service /etc/systemd/system/
-sudo cp ${PIESS_DIR}/services/iss_tracker.service /etc/systemd/system/
-sudo cp ${PIESS_DIR}/services/wifi_portal.service /etc/systemd/system/
-sudo cp ${PIESS_DIR}/services/pigpiod.service /etc/systemd/system/
-```
-
-Or create manually:
-
-**boot_decider.service:**
-```bash
-sudo nano /etc/systemd/system/boot_decider.service
-```
-```ini
-[Unit]
-Description=PieSS Boot Mode Decider
-After=network.target NetworkManager.service
-Wants=NetworkManager.service
-
-[Service]
-Type=oneshot
-ExecStart=/home/piess/PieSS/2025/v2/boot_decider.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**iss_tracker.service:**
-```bash
-sudo nano /etc/systemd/system/iss_tracker.service
-```
-```ini
-[Unit]
-Description=ISS Tracker
-After=network-online.target pigpiod.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=piess
-WorkingDirectory=/home/piess/PieSS/2025/v2
-ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 -u /home/piess/PieSS/2025/v2/iss_tracker.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**wifi_portal.service:**
-```bash
-sudo nano /etc/systemd/system/wifi_portal.service
-```
-```ini
-[Unit]
-Description=PieSS WiFi Configuration Portal
-After=network.target
-
-[Service]
-Type=simple
-User=piess
-WorkingDirectory=/home/piess/PieSS/2025/v2
-ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/wifi_portal.py
-Restart=on-failure
-RestartSec=5
-StandardOutput=append:/var/log/piess-portal.log
-StandardError=append:/var/log/piess-portal.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-#### 11. Create Log File
-```bash
-sudo touch /var/log/piess-portal.log
-sudo chown piess:piess /var/log/piess-portal.log
-```
-
-#### 12. Make Scripts Executable
-```bash
-chmod +x /home/piess/PieSS/2025/v2/boot_decider.sh
-chmod +x /home/piess/PieSS/2025/v2/iss_tracker.py
-chmod +x /home/piess/PieSS/2025/v2/wifi_portal.py
-chmod +x /home/piess/PieSS/2025/v2/hardware_test.py
-```
-
-#### 13. Enable Services
-```bash
-# Enable boot decider (this controls everything else)
-sudo systemctl enable boot_decider.service
-
-# Enable ISS tracker (will be started by boot_decider when needed)
-sudo systemctl enable iss_tracker.service
-
-# Disable AP services (boot_decider controls these)
-sudo systemctl disable hostapd
-sudo systemctl disable dnsmasq
-sudo systemctl disable wifi_portal
-```
-
-#### 14. Reload Systemd
-```bash
+# Reload systemd
 sudo systemctl daemon-reload
 ```
 
-#### 15. First Boot Test
+#### 5. Enable Services
+
+```bash
+# Enable boot orchestrator
+sudo systemctl enable boot_decider.service
+
+# Enable GPIO daemon
+sudo systemctl enable pigpiod.service
+
+# Do NOT enable iss_tracker or wifi_portal
+# These are started dynamically by boot_decider
+```
+
+#### 6. Verify Installation
+
+```bash
+# Check service files
+systemctl list-unit-files | grep piess
+
+# Check sudo permissions
+sudo -l
+
+# Test virtual environment
+source ~/PieSS/2025/v2/venv/bin/activate
+python3 -c "import skyfield; print('Skyfield imported successfully')"
+```
+
+#### 7. Reboot
+
 ```bash
 sudo reboot
+```
+
+### Python Dependencies
+
+The following Python packages are installed in the virtual environment:
+
+```
+skyfield==1.49      # Satellite position calculations
+pytz==2024.2        # Timezone handling
+requests==2.32.3    # HTTP requests for geolocation
+flask==3.0.3        # Web server framework
+pigpio==1.78        # GPIO control library
+```
+
+### Post-Installation Verification
+
+After reboot, verify the installation:
+
+```bash
+# Check boot_decider status
+systemctl status boot_decider
+
+# Check if ISS tracker or WiFi portal started
+systemctl status iss_tracker
+# OR
+systemctl status wifi_portal
+
+# View logs
+sudo journalctl -u boot_decider -f
+sudo journalctl -u iss_tracker -f
 ```
 
 ---
@@ -602,226 +474,289 @@ sudo reboot
 
 ### boot_decider.service
 
-**Purpose:** Orchestrates system startup by determining which mode to operate in based on internet connectivity. Also manages LED status indicators.
+**Purpose:** Boot orchestrator that determines which mode to start based on internet connectivity.
 
 **Location:** `/etc/systemd/system/boot_decider.service`
 
-**Script:** `/home/piess/PieSS/2025/v2/boot_decider.sh`
+**Service File:**
+```ini
+[Unit]
+Description=PieSS Boot Mode Decider
+After=NetworkManager.service
+Wants=NetworkManager.service
 
-**Behavior:**
-1. Waits 20 seconds for NetworkManager to settle
-2. Checks internet connectivity using `nmcli`
-3. If internet available: Starts `iss_tracker.service`, ensures AP LED is off
-4. If no internet: 
-   - Configures AP mode
-   - Starts blinking red LED at West position (AP mode indicator)
-   - Starts `wifi_portal.service`
+[Service]
+Type=oneshot
+ExecStart=/home/piess/PieSS/2025/v2/boot_decider.sh
+RemainAfterExit=yes
+User=piess
+StandardOutput=journal
+StandardError=journal
 
-**LED Status Indicator:**
-- Starts background process that blinks red LED (GPIO 22) at West position
-- Blink rate: 0.5s on, 0.5s off (urgent indication)
-- Process automatically stops when:
-  - WiFi successfully connected
-  - hostapd service stops
-  - System switches to ISS tracker mode
-
-**Logs:**
-```bash
-sudo journalctl -u boot_decider.service -f
+[Install]
+WantedBy=multi-user.target
 ```
 
-**Manual execution:**
+**Script Logic (boot_decider.sh):**
+
 ```bash
-sudo /home/piess/PieSS/2025/v2/boot_decider.sh
+#!/bin/bash
+
+LOG_TAG="boot_decider"
+
+log_message() {
+    echo "[$LOG_TAG] $1"
+    logger -t "$LOG_TAG" "$1"
+}
+
+# Wait for NetworkManager to be ready
+sleep 5
+
+# Check internet connectivity
+if ping -c 3 -W 5 8.8.8.8 &> /dev/null; then
+    log_message "Internet detected - starting ISS tracker mode"
+    sudo systemctl start iss_tracker.service
+else
+    log_message "No internet - starting WiFi configuration mode"
+    
+    # Configure wlan0 for AP mode
+    sudo ip link set wlan0 down
+    sudo ip addr flush dev wlan0
+    sudo ip addr add 192.168.4.1/24 dev wlan0
+    sudo ip link set wlan0 up
+    
+    # Start AP services
+    sudo systemctl start dnsmasq.service
+    sudo systemctl start hostapd.service
+    
+    # Give services time to start
+    sleep 3
+    
+    # Start web portal with LED indicator
+    /home/piess/PieSS/2025/v2/venv/bin/python3 \
+        /home/piess/PieSS/2025/v2/blink_ap_led.py &
+    
+    sudo systemctl start wifi_portal.service
+    
+    log_message "WiFi portal started at 192.168.4.1:8080"
+fi
+```
+
+**Commands:**
+```bash
+# View status
+systemctl status boot_decider
+
+# View logs
+sudo journalctl -u boot_decider -f
+
+# Manually trigger (for testing)
+sudo systemctl start boot_decider
 ```
 
 ### iss_tracker.service
 
-**Purpose:** Main ISS tracking application that monitors ISS passes and controls hardware.
+**Purpose:** Main ISS tracking application daemon.
 
-**User:** `piess`
+**Location:** `/etc/systemd/system/iss_tracker.service`
 
-**Working Directory:** `/home/piess/PieSS/2025/v2`
+**Service File:**
+```ini
+[Unit]
+Description=PieSS ISS Tracker
+After=network-online.target pigpiod.service
+Wants=network-online.target
+Requires=pigpiod.service
 
-**Restart Policy:** Always restart on failure
+[Service]
+Type=simple
+User=piess
+WorkingDirectory=/home/piess/PieSS/2025/v2
+ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/iss_tracker.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
-**Dependencies:**
-- Requires internet connectivity
-- Requires `pigpiod.service` for GPIO control
-
-**Logs:**
-```bash
-sudo journalctl -u iss_tracker.service -f
+[Install]
+WantedBy=multi-user.target
 ```
 
-**Manual control:**
+**Commands:**
 ```bash
+# Start tracker
 sudo systemctl start iss_tracker
+
+# Stop tracker
 sudo systemctl stop iss_tracker
-sudo systemctl status iss_tracker
+
+# View status
+systemctl status iss_tracker
+
+# View logs
+sudo journalctl -u iss_tracker -f
+
+# View recent errors
+sudo journalctl -u iss_tracker -p err -n 50
 ```
 
 ### wifi_portal.service
 
-**Purpose:** Web-based WiFi configuration interface.
+**Purpose:** WiFi configuration web portal daemon.
 
-**User:** `piess`
+**Location:** `/etc/systemd/system/wifi_portal.service`
 
-**Port:** 8080
+**Service File:**
+```ini
+[Unit]
+Description=PieSS WiFi Configuration Portal
+After=network.target hostapd.service dnsmasq.service
+Requires=hostapd.service dnsmasq.service
 
-**Log File:** `/var/log/piess-portal.log`
+[Service]
+Type=simple
+User=piess
+WorkingDirectory=/home/piess/PieSS/2025/v2
+ExecStart=/home/piess/PieSS/2025/v2/venv/bin/python3 /home/piess/PieSS/2025/v2/wifi_portal.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
 
-**Restart Policy:** Restart on failure
+[Install]
+WantedBy=multi-user.target
+```
 
-**Manual control:**
+**Commands:**
 ```bash
+# Start portal
 sudo systemctl start wifi_portal
+
+# Stop portal
 sudo systemctl stop wifi_portal
+
+# View status
+systemctl status wifi_portal
+
+# View logs
+sudo journalctl -u wifi_portal -f
 tail -f /var/log/piess-portal.log
 ```
 
 ### pigpiod.service
 
-**Purpose:** GPIO daemon providing hardware PWM for servo control.
+**Purpose:** GPIO daemon providing hardware PWM and precise timing.
 
-**Executable:** `/usr/local/bin/pigpiod`
+**Location:** `/etc/systemd/system/pigpiod.service`
 
-**Options:** `-l` (enable localhost socket only)
+**Service File:**
+```ini
+[Unit]
+Description=Pigpio daemon
+After=network.target
 
-**Manual control:**
+[Service]
+Type=forking
+ExecStart=/usr/bin/pigpiod -l
+ExecStop=/bin/systemctl kill pigpiod
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Commands:**
 ```bash
+# Start daemon
 sudo systemctl start pigpiod
-sudo systemctl status pigpiod
+
+# Stop daemon
+sudo systemctl stop pigpiod
+
+# View status
+systemctl status pigpiod
+
+# Check if running
+ps aux | grep pigpiod
 ```
 
-### hostapd.service
+### Service Management
 
-**Purpose:** Creates WiFi access point when in configuration mode.
+#### Starting/Stopping Services
 
-**Configuration:** `/etc/hostapd/hostapd.conf`
-
-**Interface:** wlan0
-
-**SSID:** PieSS-Setup
-
-**Password:** christmas
-
-**Manual control:**
 ```bash
-sudo systemctl start hostapd
-sudo systemctl status hostapd
-sudo journalctl -u hostapd -f
+# Start a service
+sudo systemctl start <service_name>
+
+# Stop a service
+sudo systemctl stop <service_name>
+
+# Restart a service
+sudo systemctl restart <service_name>
+
+# View status
+systemctl status <service_name>
 ```
 
-### dnsmasq.service
+#### Enabling/Disabling Services
 
-**Purpose:** DHCP and DNS server for WiFi access point.
-
-**Configuration:** `/etc/dnsmasq.conf`
-
-**IP Range:** 192.168.4.10 - 192.168.4.50
-
-**Lease Time:** 12 hours
-
-**Manual control:**
 ```bash
-sudo systemctl start dnsmasq
-sudo systemctl status dnsmasq
-sudo journalctl -u dnsmasq -f
+# Enable service (start on boot)
+sudo systemctl enable <service_name>
+
+# Disable service (don't start on boot)
+sudo systemctl disable <service_name>
+
+# Check if enabled
+systemctl is-enabled <service_name>
+```
+
+#### Viewing Logs
+
+```bash
+# Follow live logs
+sudo journalctl -u <service_name> -f
+
+# View last 100 lines
+sudo journalctl -u <service_name> -n 100
+
+# View logs since boot
+sudo journalctl -u <service_name> -b
+
+# View only errors
+sudo journalctl -u <service_name> -p err
+```
+
+#### Service Dependencies
+
+The services have the following dependencies:
+
+```
+boot_decider
+    └─ NetworkManager (waits for network)
+    └─ Starts one of:
+        ├─ iss_tracker
+        │   └─ pigpiod (required)
+        │   └─ network-online (waits for internet)
+        │
+        └─ WiFi Portal Stack
+            ├─ hostapd (required)
+            ├─ dnsmasq (required)
+            └─ wifi_portal
 ```
 
 ---
 
 ## Configuration Files
 
-### /home/piess/PieSS/2025/v2/boot_decider.sh
-
-```bash
-#!/usr/bin/env bash
-# PieSS Boot Mode Decider
-# Determines whether to start in normal mode (ISS tracker) or setup mode (WiFi portal)
-
-set -e
-
-if [[ $EUID -ne 0 ]]; then
-  echo "[boot_decider] ERROR: must be run as root"
-  exit 1
-fi
-
-echo "[boot_decider] Starting boot decision process..."
-
-# Give NetworkManager time to initialize and attempt connections
-echo "[boot_decider] Waiting for NetworkManager to settle (20s)..."
-sleep 20
-
-# Check network connectivity
-STATUS=$(nmcli -t -f STATE,CONNECTIVITY general)
-echo "[boot_decider] Network status: $STATUS"
-
-# Parse the status
-STATE=$(echo "$STATUS" | cut -d: -f1)
-CONNECTIVITY=$(echo "$STATUS" | cut -d: -f2)
-
-if [[ "$CONNECTIVITY" == "full" || "$CONNECTIVITY" == "limited" ]]; then
-    echo "[boot_decider] Internet available - starting ISS tracker"
-    
-    # Ensure AP services are stopped
-    systemctl stop hostapd 2>/dev/null || true
-    systemctl stop dnsmasq 2>/dev/null || true
-    systemctl stop wifi_portal 2>/dev/null || true
-    
-    # Start ISS tracker
-    systemctl start iss_tracker.service
-    
-else
-    echo "[boot_decider] No internet - starting WiFi configuration portal"
-    
-    # Ensure ISS tracker is stopped
-    systemctl stop iss_tracker 2>/dev/null || true
-    
-    # Enable WiFi radio
-    nmcli radio wifi on
-    
-    # Configure wlan0 for AP mode - MUST happen before starting services
-    echo "[boot_decider] Configuring wlan0 interface..."
-    ip link set wlan0 down 2>/dev/null || true
-    ip addr flush dev wlan0 2>/dev/null || true
-    ip addr add 192.168.4.1/24 dev wlan0
-    ip link set wlan0 up
-    
-    # Verify IP is set
-    sleep 1
-    WLAN0_IP=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    echo "[boot_decider] wlan0 IP address: $WLAN0_IP"
-    
-    if [[ "$WLAN0_IP" != "192.168.4.1" ]]; then
-        echo "[boot_decider] WARNING: wlan0 IP not set correctly!"
-    fi
-    
-    # Start dnsmasq first (needs IP to be set)
-    echo "[boot_decider] Starting dnsmasq..."
-    systemctl start dnsmasq
-    sleep 2
-    
-    # Then start hostapd
-    echo "[boot_decider] Starting hostapd..."
-    systemctl start hostapd
-    sleep 2
-    
-    # Finally start web portal
-    echo "[boot_decider] Starting wifi_portal..."
-    systemctl start wifi_portal
-    
-    echo "[boot_decider] WiFi portal started at http://192.168.4.1:8080"
-fi
-
-echo "[boot_decider] Boot decision complete"
-```
-
 ### /etc/hostapd/hostapd.conf
 
+**Purpose:** WiFi Access Point configuration.
+
 ```ini
-# WiFi Access Point Configuration for PieSS
+# Interface configuration
 interface=wlan0
 driver=nl80211
 
@@ -845,7 +780,37 @@ wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 ```
 
+**Configuration Details:**
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| interface | wlan0 | WiFi interface to use |
+| driver | nl80211 | Modern Linux WiFi driver |
+| ssid | PieSS-Setup | Network name (visible to users) |
+| hw_mode | g | 2.4 GHz band (802.11g) |
+| channel | 6 | WiFi channel (1-11) |
+| ieee80211n | 1 | Enable 802.11n (faster speeds) |
+| wpa | 2 | WPA2 security |
+| wpa_passphrase | christmas | Network password |
+| wpa_key_mgmt | WPA-PSK | Pre-shared key authentication |
+| rsn_pairwise | CCMP | AES encryption |
+
+**Changing Configuration:**
+
+```bash
+# Edit configuration
+sudo nano /etc/hostapd/hostapd.conf
+
+# Test configuration
+sudo hostapd -dd /etc/hostapd/hostapd.conf
+
+# Restart service
+sudo systemctl restart hostapd
+```
+
 ### /etc/dnsmasq.conf
+
+**Purpose:** DHCP server configuration for Access Point mode.
 
 ```ini
 # DHCP Configuration for PieSS Access Point
@@ -855,7 +820,40 @@ domain-needed
 bogus-priv
 ```
 
+**Configuration Details:**
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| interface | wlan0 | Interface to provide DHCP on |
+| dhcp-range | 192.168.4.10-50 | IP address pool |
+| netmask | 255.255.255.0 | Subnet mask (/24) |
+| lease-time | 12h | How long IPs are assigned |
+| domain-needed | enabled | Don't forward non-FQDN queries |
+| bogus-priv | enabled | Don't forward private IP queries |
+
+**The DHCP Setup:**
+- Gateway: 192.168.4.1 (PieSS)
+- DNS: 192.168.4.1 (forwarded by dnsmasq)
+- Range: 192.168.4.10 - 192.168.4.50
+- Subnet: 255.255.255.0
+- Max clients: 41
+
+**Testing DHCP:**
+
+```bash
+# Check if dnsmasq is running
+systemctl status dnsmasq
+
+# View DHCP leases
+cat /var/lib/misc/dnsmasq.leases
+
+# Test DNS forwarding
+nslookup google.com 192.168.4.1
+```
+
 ### /etc/sudoers.d/piess-sudoers
+
+**Purpose:** Grant piess user passwordless sudo for specific commands.
 
 ```bash
 # Sudoers configuration for PieSS user
@@ -869,6 +867,30 @@ piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop dnsmasq
 piess ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart dnsmasq
 piess ALL=(ALL) NOPASSWD: /usr/bin/nmcli
 piess ALL=(ALL) NOPASSWD: /usr/sbin/ip
+piess ALL=(ALL) NOPASSWD: /usr/bin/kill
+piess ALL=(ALL) NOPASSWD: /bin/sh
+piess ALL=(ALL) NOPASSWD: /bin/rm
+```
+
+**Why These Permissions:**
+
+- `systemctl` commands: Start/stop AP services
+- `nmcli`: WiFi network management
+- `ip`: Network interface configuration
+- `kill`: Stop background processes (LED blinker)
+- `sh`: Execute shell commands from Python
+- `rm`: Delete network connection profiles
+
+**Security Note:** These permissions are necessary for the WiFi portal to function without manual intervention, but they should only be used on trusted networks.
+
+**Verification:**
+
+```bash
+# Check sudo permissions for piess user
+sudo -l -U piess
+
+# Test a command (should not ask for password)
+sudo systemctl status hostapd
 ```
 
 ---
@@ -903,7 +925,7 @@ def get_satellite_data():
 
 #### 3. Sunrise/Sunset Calculation
 ```python
-def get_sunrise_sunset(observer_topos, date_t, ephemeris):
+def get_sunrise_sunset(observer_topos, date_t, ts, ephemeris):
     """Calculate sunrise and sunset times for a given date"""
 ```
 - Uses Skyfield's almanac module
@@ -912,7 +934,7 @@ def get_sunrise_sunset(observer_topos, date_t, ephemeris):
 
 #### 4. Night-Time Visibility Check
 ```python
-def is_visible_at_night(observer_topos, pass_time_t, ephemeris):
+def is_visible_at_night(observer_topos, pass_time_t, ts, ephemeris):
     """Check if pass occurs during night time"""
 ```
 - Compares pass time against sunrise/sunset
@@ -1009,7 +1031,7 @@ TLE_REFRESH_HOURS = 12   # TLE data refresh interval
 def start_scan_animation():
     """Start LED animation to indicate WiFi scanning in progress"""
 ```
-- Starts circular LED animation (N→E→S→W)
+- Starts circular LED animation (N->E->S->W)
 - Each directional LED illuminates for 0.125 seconds
 - Creates "radar scanning" visual effect
 - Runs in background thread during ~8 second scan
@@ -1085,411 +1107,669 @@ scan_cache = {
 ```
 
 **Templates:**
-- `wifi_portal.html` - Main configuration interface
-- `wifi_result.html` - Connection result page
+- `wifi_portal.html`: Main configuration page
+- `wifi_result.html`: Connection result page
+- Uses Jinja2 templating engine
+
+**Logging:**
+- All activity logged to `/var/log/piess-portal.log`
+- Includes timestamps, network operations, errors
+- Useful for troubleshooting connection issues
 
 ### hardware_test.py
 
-**Purpose:** Standalone utility to test all hardware connections.
+**Purpose:** Standalone hardware testing utility.
 
 **Usage:**
 ```bash
-cd /home/piess/PieSS/2025/v2
-source venv/bin/activate
-sudo systemctl stop iss_tracker
+# Activate virtual environment
+source ~/PieSS/2025/v2/venv/bin/activate
+
+# Run hardware test
 python3 hardware_test.py
-# Press Ctrl+C to stop
 ```
 
 **Test Sequence:**
-1. North LED (0.5s on, 0.2s off)
-2. West LED
-3. South LED
-4. East LED
-5. 30-minute LED (red)
-6. 10-minute LED (yellow)
-7. 5-minute LED (green)
-8. Servo UP (2s hold)
-9. Servo DOWN (2s hold)
-10. 2 second pause, then repeat
+1. Tests each LED individually (0.5s on)
+2. Tests servo up position (2s)
+3. Tests servo down position (2s)
+4. Confirms all hardware working
 
 **Output:**
 ```
-=== PieSS Hardware Test ===
-Testing all LEDs and servo in sequence...
-Press Ctrl+C to exit
-
---- Test Cycle 1 ---
-Testing: North LED (GPIO 5)... OK
-Testing: West LED (GPIO 12)... OK
-Testing: South LED (GPIO 13)... OK
-Testing: East LED (GPIO 6)... OK
-Testing: 30-min LED (GPIO 22)... OK
-Testing: 10-min LED (GPIO 27)... OK
-Testing: 5-min LED (GPIO 17)... OK
-Testing: Servo UP (GPIO 16)... OK
-Testing: Servo DOWN (GPIO 16)... OK
-
-Waiting 2 seconds before next cycle...
-
---- Test Cycle 2 ---
-...
+Starting hardware test...
+Testing North LED (GPIO 5)...
+Testing East LED (GPIO 6)...
+Testing West LED (GPIO 12)...
+Testing South LED (GPIO 13)...
+Testing Green Alert LED (GPIO 17)...
+Testing Red Alert LED (GPIO 22)...
+Testing Yellow Alert LED (GPIO 27)...
+Testing Servo UP position...
+Testing Servo DOWN position...
+Hardware test complete!
 ```
+
+### check_passes.py
+
+**Purpose:** Debug utility for viewing calculated ISS passes.
+
+**Usage:**
+```bash
+# Activate virtual environment
+source ~/PieSS/2025/v2/venv/bin/activate
+
+# Run pass checker
+python3 check_passes.py
+```
+
+**Output Example:**
+```
+Location: 43.5771°N, 79.7275°W
+Sunrise: 2025-01-05 07:42:15 EST
+Sunset:  2025-01-05 17:18:32 EST
+
+ISS Passes (next 24 hours):
+============================
+
+Pass 1:
+  Time:    2025-01-05 19:23:45 EST
+  Max Alt: 67.3°
+  Azimuth: 142.5° (SE)
+  Status:  VISIBLE (night-time pass)
+
+Pass 2:
+  Time:    2025-01-05 21:01:23 EST
+  Max Alt: 23.8°
+  Azimuth: 287.1° (W)
+  Status:  VISIBLE (night-time pass)
+
+Pass 3:
+  Time:    2025-01-06 08:45:12 EST
+  Max Alt: 45.2°
+  Azimuth: 198.7° (SSW)
+  Status:  SKIPPED (daytime pass)
+```
+
+**Use Cases:**
+- Verify pass calculations
+- Check night filtering logic
+- Troubleshoot missed passes
+- Understand ISS visibility patterns
 
 ---
 
 ## Network Configuration
 
-### NetworkManager
+### Access Point Details
 
-PieSS uses NetworkManager for WiFi management. NetworkManager is the default network management system in Raspberry Pi OS Trixie.
+**Network Name:** PieSS-Setup
 
-**Configuration:**
-- NetworkManager handles WiFi connections automatically
-- Saved WiFi networks are stored in `/etc/NetworkManager/system-connections/`
-- Boot_decider checks connectivity using `nmcli general status`
+**Password:** christmas
 
-**Useful Commands:**
-```bash
-# Check network status
-nmcli general status
-
-# List WiFi networks
-nmcli dev wifi list
-
-# Connect to WiFi
-nmcli dev wifi connect "SSID" password "PASSWORD"
-
-# Show saved connections
-nmcli connection show
-
-# Delete a connection
-nmcli connection delete "SSID"
-
-# Check device status
-nmcli dev status
-```
-
-### Access Point Mode
-
-When PieSS creates an access point:
-
-**Interface:** wlan0
-
-**IP Address:** 192.168.4.1/24
+**IP Address:** 192.168.4.1
 
 **DHCP Range:** 192.168.4.10 - 192.168.4.50
 
-**Network Configuration:**
-```bash
-# Check if wlan0 has correct IP
-ip addr show wlan0
+**Configuration Portal:** http://192.168.4.1:8080
 
-# Should show:
-# inet 192.168.4.1/24 scope global wlan0
+### WiFi Configuration Process
 
-# Check if services are running
-systemctl status hostapd
-systemctl status dnsmasq
+#### For Users (Connecting to PieSS)
+
+1. **Power on PieSS** without internet connection
+   - Wait 30 seconds for AP mode to start
+   - Red LED will blink on the device
+
+2. **Connect to PieSS-Setup network**
+   - Open WiFi settings on your phone/computer
+   - Look for network "PieSS-Setup"
+   - Password: christmas
+
+3. **Open configuration portal**
+   - Most devices: Portal opens automatically (captive portal)
+   - Manual access: Open browser to http://192.168.4.1:8080
+
+4. **Scan for networks**
+   - Click "Scan for WiFi Networks" button
+   - Watch circular LED animation during scan
+   - Wait for network list to appear (~10 seconds)
+
+5. **Select and connect**
+   - Choose your WiFi network from list
+   - Enter password
+   - Click "Connect"
+   - Wait for confirmation (may disconnect briefly)
+
+6. **Verify connection**
+   - Check for success message
+   - Red LED should stop blinking
+   - PieSS will reboot into ISS tracker mode
+
+#### Network Transition Flow
+
+```
+User Connects to PieSS-Setup
+    |
+    v
+Opens 192.168.4.1:8080
+    |
+    v
+Clicks "Scan for WiFi Networks"
+    |
+    v
+[Portal stops AP temporarily]
+    |
+    v
+[LED scanning animation plays]
+    |
+    v
+[Portal scans for networks]
+    |
+    v
+[Portal restarts AP]
+    |
+    v
+Network list displayed
+    |
+    v
+User selects network & enters password
+    |
+    v
+[Portal attempts connection]
+    |
+    +---> [Success] ----> AP stops permanently
+    |                      LED stops blinking
+    |                      System reboots to ISS mode
+    |
+    +---> [Failure] ----> AP restarts
+                          User can try again
 ```
 
-**Clients connecting will:**
-1. Associate with "PieSS-Setup" SSID
-2. Receive IP via DHCP (192.168.4.10-50 range)
-3. Can access web portal at http://192.168.4.1:8080
+### NetworkManager Configuration
+
+PieSS uses NetworkManager for WiFi management, which provides several advantages:
+
+**Benefits:**
+- Automatic connection to known networks
+- Persistent connection profiles
+- Better roaming support
+- Integration with systemd
+
+**Connection Management:**
+```bash
+# List saved connections
+nmcli con show
+
+# Delete a connection
+nmcli con delete "SSID_NAME"
+
+# Show current connection
+nmcli con show --active
+
+# Manually connect
+nmcli dev wifi connect "SSID" password "PASSWORD"
+```
+
+**Connection Priority:**
+
+NetworkManager automatically connects to networks in this order:
+1. Previously successful connections (highest priority)
+2. Strongest signal strength
+3. Most recent connection
+
+**Troubleshooting Connections:**
+
+```bash
+# Check WiFi status
+nmcli radio wifi
+
+# Turn WiFi on
+nmcli radio wifi on
+
+# Rescan for networks
+nmcli dev wifi rescan
+
+# Show detailed connection info
+nmcli -f ALL con show "CONNECTION_NAME"
+```
 
 ### Firewall Configuration
 
-PieSS does not require special firewall rules. If you have a firewall enabled:
+PieSS does not use a firewall by default for simplicity, but you can add one:
 
 ```bash
-# Allow incoming on port 8080 (WiFi portal)
+# Install UFW (Uncomplicated Firewall)
+sudo apt install ufw
+
+# Allow SSH
+sudo ufw allow 22/tcp
+
+# Allow web portal
 sudo ufw allow 8080/tcp
 
-# Allow DHCP
-sudo ufw allow 67/udp
-sudo ufw allow 68/udp
+# Enable firewall
+sudo ufw enable
 
-# Allow DNS
-sudo ufw allow 53/tcp
-sudo ufw allow 53/udp
+# Check status
+sudo ufw status verbose
 ```
 
 ---
 
 ## Troubleshooting
 
-### ISS Tracker Issues
+### Common Issues
 
-#### Problem: ISS tracker service won't start
+#### 1. Service Won't Start
 
-**Check logs:**
+**Symptoms:**
+- `systemctl status <service>` shows "failed" or "inactive"
+- Errors in journal logs
+
+**Diagnosis:**
 ```bash
-sudo journalctl -u iss_tracker -n 100 --no-pager
+# Check service status
+systemctl status iss_tracker
+
+# View detailed logs
+sudo journalctl -u iss_tracker -n 50
+
+# Check if dependencies are running
+systemctl status pigpiod
 ```
 
-**Common causes:**
-1. **No internet connectivity**
-   ```bash
-   ping -c 3 google.com
-   ```
+**Solutions:**
 
-2. **pigpiod not running**
-   ```bash
-   systemctl status pigpiod
-   sudo systemctl start pigpiod
-   ```
-
-3. **Python environment issues**
-   ```bash
-   cd /home/piess/PieSS/2025/v2
-   source venv/bin/activate
-   python3 iss_tracker.py  # Run manually to see errors
-   ```
-
-4. **Permission issues**
-   ```bash
-   # Check file ownership
-   ls -la /home/piess/PieSS/2025/v2/
-   # Should be owned by piess:piess
-   
-   # Fix if needed
-   sudo chown -R piess:piess /home/piess/PieSS/2025/v2/
-   ```
-
-#### Problem: No ISS passes detected
-
-**Run debug utility:**
+a) **Missing Python packages:**
 ```bash
-cd /home/piess/PieSS/2025/v2
+cd ~/PieSS/2025/v2
 source venv/bin/activate
-python3 check_passes.py
+pip install -r requirements.txt
 ```
 
-This shows all passes in the next 48 hours. If no passes appear:
-- Check location detection is working
-- Verify TLE data is being downloaded
-- Check MIN_ELEVATION setting (default 15°)
-
-#### Problem: LEDs not lighting up
-
-**Test hardware:**
+b) **Permission issues:**
 ```bash
-cd /home/piess/PieSS/2025/v2
+# Check file ownership
+ls -l ~/PieSS/2025/v2/iss_tracker.py
+
+# Fix ownership if needed
+sudo chown piess:piess ~/PieSS/2025/v2/*.py
+```
+
+c) **pigpiod not running:**
+```bash
+sudo systemctl start pigpiod
+sudo systemctl enable pigpiod
+```
+
+#### 2. No Internet Connection / Stuck in AP Mode
+
+**Symptoms:**
+- PieSS always creates AP, never starts ISS tracker
+- Can't connect to home WiFi
+
+**Diagnosis:**
+```bash
+# Check connectivity
+ping -c 3 8.8.8.8
+
+# Check WiFi status
+nmcli dev wifi
+
+# List saved connections
+nmcli con show
+```
+
+**Solutions:**
+
+a) **Delete bad connection profile:**
+```bash
+nmcli con show
+nmcli con delete "BAD_CONNECTION_NAME"
+```
+
+b) **Manually connect to WiFi:**
+```bash
+nmcli dev wifi connect "YOUR_SSID" password "YOUR_PASSWORD"
+```
+
+c) **Force network rescan:**
+```bash
+sudo systemctl restart NetworkManager
+nmcli dev wifi rescan
+```
+
+d) **Check router settings:**
+- MAC address filtering disabled
+- DHCP enabled
+- Correct password
+
+#### 3. LEDs Not Working
+
+**Symptoms:**
+- LEDs don't light up during hardware test
+- Some LEDs work, others don't
+
+**Diagnosis:**
+```bash
+# Run hardware test
+cd ~/PieSS/2025/v2
 source venv/bin/activate
-sudo systemctl stop iss_tracker
 python3 hardware_test.py
 ```
 
-**Check wiring:**
-- Verify GPIO pin assignments match code
-- Check LED polarity (long leg = anode/positive)
-- Verify resistors are in place
-- Test LED directly with 3.3V and ground
+**Solutions:**
 
-**Check pigpio:**
+a) **Check physical connections:**
+- LED polarity (long leg = +, short leg = -)
+- Resistor in series
+- Secure jumper wire connections
+
+b) **Check pigpiod:**
 ```bash
 systemctl status pigpiod
-# Should show "active (running)"
-
-# Test GPIO access
-sudo pigpiod -v
+sudo systemctl restart pigpiod
 ```
 
-#### Problem: Servo not moving
+c) **Test individual GPIO:**
+```bash
+# Export GPIO 22 (red LED)
+echo 22 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio22/direction
 
-**Check power:**
-- Servo needs 5V, not 3.3V
-- Verify servo is connected to Pin 2 (5V) and Pin 6 (GND)
-- Signal wire to GPIO 16 (Pin 36)
+# Turn on
+echo 1 > /sys/class/gpio/gpio22/value
 
-**Test servo manually:**
+# Turn off
+echo 0 > /sys/class/gpio/gpio22/value
+
+# Cleanup
+echo 22 > /sys/class/gpio/unexport
+```
+
+d) **LED or resistor failure:**
+- Test LED with multimeter
+- Replace LED if needed
+- Check resistor value (should be 220Ω)
+
+#### 4. Servo Not Moving
+
+**Symptoms:**
+- Flag doesn't raise/lower
+- Servo makes clicking noise
+- Servo jitters
+
+**Diagnosis:**
+```bash
+# Run hardware test
+python3 hardware_test.py
+
+# Check pigpiod
+systemctl status pigpiod
+```
+
+**Solutions:**
+
+a) **Check power supply:**
+- Servo draws significant current
+- Use 2.5A power supply minimum
+- Check 5V pin voltage with multimeter
+
+b) **Check servo connection:**
+- Red wire to 5V
+- Brown/Black wire to GND
+- Orange/Yellow wire to GPIO 16
+
+c) **Adjust pulse width:**
+Edit `iss_tracker.py`:
+```python
+SERVO_UP = 530    # Try values 500-700
+SERVO_DOWN = 1530 # Try values 1400-1600
+```
+
+d) **Test servo independently:**
 ```python
 import pigpio
+import time
+
 pi = pigpio.pi()
-pi.set_servo_pulsewidth(16, 1000)  # Mid position
-pi.set_servo_pulsewidth(16, 530)   # Up
-pi.set_servo_pulsewidth(16, 1530)  # Down
-pi.set_servo_pulsewidth(16, 0)     # Off
+pi.set_servo_pulsewidth(16, 1000)  # Middle position
+time.sleep(2)
+pi.set_servo_pulsewidth(16, 500)   # One end
+time.sleep(2)
+pi.set_servo_pulsewidth(16, 1500)  # Other end
 pi.stop()
 ```
 
-### WiFi Portal Issues
+#### 5. WiFi Portal Not Accessible
 
-#### Problem: Access point not appearing
+**Symptoms:**
+- Can connect to PieSS-Setup but can't access portal
+- Browser shows "connection refused"
+- Portal page doesn't load
 
-**Check services:**
+**Diagnosis:**
 ```bash
+# Check AP services
 systemctl status hostapd
 systemctl status dnsmasq
 systemctl status wifi_portal
+
+# Check if portal is listening
+sudo netstat -tulpn | grep 8080
+
+# Check wlan0 configuration
+ip addr show wlan0
 ```
 
-**Check wlan0 configuration:**
-```bash
-ip addr show wlan0
-# Should show: inet 192.168.4.1/24
+**Solutions:**
 
-# If not, configure manually:
+a) **Services not running:**
+```bash
+sudo systemctl start hostapd
+sudo systemctl start dnsmasq
+sudo systemctl start wifi_portal
+```
+
+b) **Wrong IP address:**
+```bash
+# Set correct IP
 sudo ip addr flush dev wlan0
 sudo ip addr add 192.168.4.1/24 dev wlan0
 sudo ip link set wlan0 up
 ```
 
-**Check hostapd logs:**
+c) **Port conflict:**
 ```bash
-sudo journalctl -u hostapd -n 50
+# Check what's using port 8080
+sudo lsof -i :8080
+
+# Kill conflicting process
+sudo kill <PID>
 ```
 
-**Common errors:**
-- "Could not configure driver mode" → wlan0 is being managed by NetworkManager
-- "Failed to create interface" → wlan0 doesn't have IP address
-- "Channel X not allowed" → Country code restrictions
-
-**Fix NetworkManager conflict:**
+d) **Firewall blocking:**
 ```bash
-sudo nano /etc/NetworkManager/NetworkManager.conf
-
-# Add:
-[keyfile]
-unmanaged-devices=interface-name:wlan0
-
-sudo systemctl restart NetworkManager
+# If UFW is enabled
+sudo ufw allow 8080/tcp
 ```
 
-#### Problem: Can't access web portal (192.168.4.1:8080)
-
-**Check if portal is running:**
-```bash
-systemctl status wifi_portal
-tail -f /var/log/piess-portal.log
-```
-
-**Check if port is listening:**
-```bash
-sudo netstat -tulpn | grep 8080
-# Should show: tcp 0.0.0.0:8080 ... python3
-```
-
-**Test from Pi itself:**
-```bash
-curl http://192.168.4.1:8080
-# Should return HTML
-```
-
-**Verify client got IP:**
-- Client should have IP in range 192.168.4.10-50
-- Check dnsmasq logs: `sudo journalctl -u dnsmasq -f`
-
-#### Problem: Network list is empty
-
-**Check scan function:**
-```bash
-# Test nmcli directly
-nmcli dev wifi list
-
-# Should show available networks
-```
-
-**Check sudo permissions:**
-```bash
-sudo -l
-# Should show nmcli commands as NOPASSWD
-```
-
-**Check logs when clicking Refresh:**
-```bash
-tail -f /var/log/piess-portal.log
-```
-
-#### Problem: Can't connect to WiFi from portal
-
-**Error: "unknown connection"**
-- WiFi password is incorrect
-- SSID doesn't exist or out of range
-
-**Error: "Failed to connect"**
-- Signal too weak
-- WPA/WPA2 security mismatch
-- DHCP failure on target network
-
-**Debug connection:**
-```bash
-# Try manually
-sudo nmcli dev wifi connect "YourSSID" password "YourPassword"
-
-# Check connection status
-nmcli con show
-nmcli dev status
-```
-
-### General System Issues
-
-#### Problem: Service won't start on boot
-
-**Check service status:**
-```bash
-systemctl status boot_decider
-systemctl status iss_tracker
-```
-
-**Check for failed services:**
-```bash
-systemctl --failed
-```
-
-**View boot logs:**
-```bash
-sudo journalctl -b
-```
-
-**Check service dependencies:**
-```bash
-systemctl list-dependencies boot_decider.service
-```
-
-#### Problem: High CPU usage
-
-**Check running processes:**
-```bash
-top
-# Press 'P' to sort by CPU
-# Press 'q' to quit
-```
-
-**Common causes:**
-- iss_tracker in tight loop (check logs)
-- Multiple instances running (check with `ps aux | grep python`)
-- LED blinking consuming CPU (expected during countdowns)
-
-**Kill stuck process:**
-```bash
-sudo systemctl stop iss_tracker
-sudo pkill -f iss_tracker.py
-```
-
-#### Problem: SD card corruption
+#### 6. ISS Tracker Not Alerting
 
 **Symptoms:**
-- System won't boot
-- Files missing or read-only
-- "Read-only file system" errors
+- Tracker running but no alerts
+- No passes found
 
-**Prevention:**
-- Always shutdown properly: `sudo shutdown -h now`
-- Use quality SD card (Class 10, A1 rated)
-- Keep SD card clean and cool
-
-**Recovery:**
+**Diagnosis:**
 ```bash
-# Boot from another SD card
-# Mount corrupted card
-sudo mount -o remount,rw /dev/sdX1
+# Check pass calculations
+cd ~/PieSS/2025/v2
+source venv/bin/activate
+python3 check_passes.py
 
-# Check filesystem
-sudo fsck -f /dev/sdX1
+# Check logs for pass info
+sudo journalctl -u iss_tracker | grep "Next visible pass"
+```
 
-# If beyond repair, reflash SD card and restore from backup
+**Solutions:**
+
+a) **No visible passes in next 24 hours:**
+- ISS passes vary by location and time
+- Check again tomorrow
+- Verify passes with ISS Detector app
+
+b) **Location detection failed:**
+```bash
+# Check logs
+sudo journalctl -u iss_tracker | grep "location"
+
+# Manually test geolocation
+python3 -c "import requests; print(requests.get('https://ipapi.co/json/').json())"
+```
+
+c) **Time/timezone issue:**
+```bash
+# Check system time
+timedatectl
+
+# Set correct timezone
+sudo timedatectl set-timezone America/Toronto
+```
+
+d) **TLE data stale:**
+```bash
+# Remove cached TLE data
+cd ~/PieSS/2025/v2
+rm stations.tle
+
+# Restart tracker to re-download
+sudo systemctl restart iss_tracker
+```
+
+### Log Files
+
+**Location:** Logs are stored in systemd journal
+
+**Viewing Logs:**
+
+```bash
+# ISS Tracker logs
+sudo journalctl -u iss_tracker -f
+
+# WiFi Portal logs
+sudo journalctl -u wifi_portal -f
+cat /var/log/piess-portal.log
+
+# Boot Decider logs
+sudo journalctl -u boot_decider -f
+
+# All PieSS logs
+sudo journalctl -t boot_decider -t iss_tracker -t wifi_portal -f
+
+# View logs since last boot
+sudo journalctl -u iss_tracker -b
+
+# View only errors
+sudo journalctl -u iss_tracker -p err -n 50
+
+# Export logs to file
+sudo journalctl -u iss_tracker > ~/iss_logs.txt
+```
+
+### Hardware Diagnostics
+
+#### LED Test Sequence
+
+```bash
+cd ~/PieSS/2025/v2
+source venv/bin/activate
+python3 hardware_test.py
+```
+
+Expected output:
+```
+Starting hardware test...
+Testing North LED (GPIO 5)...
+Testing East LED (GPIO 6)...
+[etc...]
+Hardware test complete!
+```
+
+#### Manual GPIO Testing
+
+Test individual components:
+
+```python
+import pigpio
+import time
+
+pi = pigpio.pi()
+
+# Test LED (GPIO 22)
+pi.write(22, 1)  # On
+time.sleep(1)
+pi.write(22, 0)  # Off
+
+# Test Servo
+pi.set_servo_pulsewidth(16, 1000)
+time.sleep(2)
+pi.set_servo_pulsewidth(16, 0)  # Stop signal
+
+pi.stop()
+```
+
+### Network Diagnostics
+
+#### Check Connectivity
+
+```bash
+# Test internet
+ping -c 3 8.8.8.8
+
+# Test DNS
+nslookup google.com
+
+# Show routing table
+ip route show
+
+# Show WiFi connections
+nmcli con show
+```
+
+#### Check AP Mode
+
+```bash
+# Check hostapd
+systemctl status hostapd
+
+# Check dnsmasq
+systemctl status dnsmasq
+
+# Check wlan0
+ip addr show wlan0
+
+# Check DHCP leases
+cat /var/lib/misc/dnsmasq.leases
+```
+
+### Performance Monitoring
+
+```bash
+# CPU usage
+top -u piess
+
+# Memory usage
+free -h
+
+# Disk space
+df -h
+
+# Temperature
+vcgencmd measure_temp
+
+# System load
+uptime
 ```
 
 ---
@@ -1498,189 +1778,290 @@ sudo fsck -f /dev/sdX1
 
 ### Regular Maintenance Tasks
 
-#### Weekly
-- Check for system updates: `sudo apt update && sudo apt upgrade`
-- Verify ISS tracker is finding passes: `sudo journalctl -u iss_tracker | tail -20`
-- Test hardware: `python3 hardware_test.py`
+#### Daily (Automated)
+- TLE data refresh (every 12 hours)
+- Pass calculations
+- Hardware state management
 
-#### Monthly
-- Clean dust from Raspberry Pi and components
-- Check LED brightness (may dim over time)
-- Verify servo movement is smooth
-- Review log files for errors
+#### Weekly (Recommended)
+- Check system logs for errors
+- Verify disk space
+- Test hardware components
 
-#### As Needed
-- Update WiFi credentials if changed
-- Adjust MIN_ELEVATION if passes not visible
-- Replace LEDs if burned out
-- Update TLE data manually if stale
+#### Monthly (Recommended)
+- Update system packages
+- Review and clean logs
+- Backup configuration files
+
+### System Updates
+
+```bash
+# Update package lists
+sudo apt update
+
+# Upgrade installed packages
+sudo apt upgrade -y
+
+# Update Python packages (in venv)
+cd ~/PieSS/2025/v2
+source venv/bin/activate
+pip list --outdated
+pip install --upgrade <package_name>
+
+# Reboot if kernel updated
+sudo reboot
+```
 
 ### Backup Procedures
 
-#### Backup Configuration Files
+#### Configuration Backup
+
 ```bash
 # Create backup directory
-mkdir -p ~/piess-backup/$(date +%Y%m%d)
-
-# Backup Python files
-cp ~/PieSS/2025/v2/*.py ~/piess-backup/$(date +%Y%m%d)/
+mkdir -p ~/piess_backup
 
 # Backup service files
-sudo cp /etc/systemd/system/*piess* ~/piess-backup/$(date +%Y%m%d)/
-sudo cp /etc/systemd/system/boot_decider.service ~/piess-backup/$(date +%Y%m%d)/
+sudo cp /etc/systemd/system/boot_decider.service ~/piess_backup/
+sudo cp /etc/systemd/system/iss_tracker.service ~/piess_backup/
+sudo cp /etc/systemd/system/wifi_portal.service ~/piess_backup/
+sudo cp /etc/systemd/system/pigpiod.service ~/piess_backup/
 
-# Backup configuration
-sudo cp /etc/hostapd/hostapd.conf ~/piess-backup/$(date +%Y%m%d)/
-sudo cp /etc/dnsmasq.conf ~/piess-backup/$(date +%Y%m%d)/
-sudo cp /etc/sudoers.d/piess-sudoers ~/piess-backup/$(date +%Y%m%d)/
+# Backup configuration files
+sudo cp /etc/hostapd/hostapd.conf ~/piess_backup/
+sudo cp /etc/dnsmasq.conf ~/piess_backup/
+sudo cp /etc/sudoers.d/piess-sudoers ~/piess_backup/
 
-# Compress backup
-cd ~/piess-backup
-tar -czf piess-backup-$(date +%Y%m%d).tar.gz $(date +%Y%m%d)/
+# Backup application files
+cp ~/PieSS/2025/v2/*.py ~/piess_backup/
+cp ~/PieSS/2025/v2/*.sh ~/piess_backup/
+
+# Create archive
+cd ~
+tar -czf piess_backup_$(date +%Y%m%d).tar.gz piess_backup/
 ```
 
-#### Full SD Card Image
+#### SD Card Image Backup
+
+**Windows (Win32DiskImager):**
+1. Download Win32DiskImager
+2. Insert SD card in card reader
+3. Select drive letter
+4. Choose output file location
+5. Click "Read" to create image
+
+**macOS/Linux:**
 ```bash
-# From another computer with SD card reader
-# (Replace /dev/sdX with your SD card device)
-sudo dd if=/dev/sdX of=piess-backup-$(date +%Y%m%d).img bs=4M status=progress
+# Find SD card device
+lsblk  # or diskutil list on macOS
+
+# Create image (replace /dev/sdX with your device)
+sudo dd if=/dev/sdX of=~/piess_backup.img bs=4M status=progress
 
 # Compress image
-gzip piess-backup-$(date +%Y%m%d).img
+gzip ~/piess_backup.img
 ```
 
 ### Log Management
 
-**View Recent Logs:**
+#### View Log Sizes
+
 ```bash
-# ISS Tracker
-sudo journalctl -u iss_tracker -n 100
+# Journal logs
+sudo journalctl --disk-usage
 
-# WiFi Portal
-tail -100 /var/log/piess-portal.log
-
-# Boot Decider
-sudo journalctl -u boot_decider -n 50
-
-# All logs since last boot
-sudo journalctl -b
+# Portal logs
+ls -lh /var/log/piess-portal.log
 ```
 
-**Clear Old Logs:**
+#### Clean Old Logs
+
 ```bash
-# Clear systemd journal (keeps last 7 days)
-sudo journalctl --vacuum-time=7d
+# Keep only 1 week of journal logs
+sudo journalctl --vacuum-time=1w
 
-# Clear WiFi portal log
-sudo truncate -s 0 /var/log/piess-portal.log
-```
+# Keep only 500MB of journal logs
+sudo journalctl --vacuum-size=500M
 
-**Export Logs for Analysis:**
-```bash
-# Export ISS tracker logs
-sudo journalctl -u iss_tracker --since "2025-12-01" > iss-logs.txt
-
-# Export all logs
-sudo journalctl --since "2025-12-01" > system-logs.txt
-```
-
-### Software Updates
-
-#### Update PieSS Code
-```bash
-cd ~/PieSS/2025/v2
-git pull origin main
-
-# Restart services
-sudo systemctl restart iss_tracker
+# Rotate portal log
+sudo mv /var/log/piess-portal.log /var/log/piess-portal.log.old
 sudo systemctl restart wifi_portal
 ```
 
-#### Update Python Dependencies
+### Performance Optimization
+
+#### Reduce Boot Time
+
 ```bash
-cd ~/PieSS/2025/v2
-source venv/bin/activate
-pip install --upgrade pip
-pip install --upgrade -r requirements.txt
+# Check boot time
+systemd-analyze
+
+# Check service startup times
+systemd-analyze blame
+
+# Disable unnecessary services
+sudo systemctl disable bluetooth.service
+sudo systemctl disable hciuart.service
 ```
 
-#### Update System
+#### Reduce Memory Usage
+
 ```bash
-sudo apt update
-sudo apt upgrade -y
-sudo apt autoremove -y
+# Check memory
+free -h
+
+# Reduce GPU memory (edit /boot/config.txt)
+gpu_mem=16  # Minimal, since no display needed
+
+# Disable swap if not needed
+sudo dphys-swapfile swapoff
+sudo dphys-swapfile uninstall
+sudo systemctl disable dphys-swapfile
+```
+
+### Hardware Maintenance
+
+#### LED Replacement
+
+If an LED fails:
+1. Power off Raspberry Pi
+2. Remove faulty LED
+3. Check LED polarity (long leg = +)
+4. Insert new LED
+5. Verify resistor still present (220Ω)
+6. Power on and test with `hardware_test.py`
+
+#### Servo Maintenance
+
+Servos can wear out over time:
+- Listen for grinding noises
+- Check for smooth movement
+- Replace if erratic or weak
+- Use same voltage rating (5V)
+
+#### Connection Maintenance
+
+Periodically check:
+- Jumper wire connections (can loosen)
+- Breadboard connections
+- Solder joints (if using perfboard)
+- Power supply cable
+
+### Factory Reset
+
+To completely reset PieSS:
+
+```bash
+# Stop all services
+sudo systemctl stop iss_tracker
+sudo systemctl stop wifi_portal
+sudo systemctl stop boot_decider
+
+# Disable services
+sudo systemctl disable iss_tracker
+sudo systemctl disable wifi_portal
+sudo systemctl disable boot_decider
+
+# Remove service files
+sudo rm /etc/systemd/system/boot_decider.service
+sudo rm /etc/systemd/system/iss_tracker.service
+sudo rm /etc/systemd/system/wifi_portal.service
+
+# Remove configuration files
+sudo rm /etc/hostapd/hostapd.conf
+sudo rm /etc/dnsmasq.conf
+sudo rm /etc/sudoers.d/piess-sudoers
+
+# Remove application files
+rm -rf ~/PieSS
+
+# Clean NetworkManager connections
+nmcli con delete "PieSS-Setup"
+
+# Reboot
 sudo reboot
 ```
+
+Then reinstall from scratch using the installation instructions.
 
 ---
 
 ## Technical Reference
 
-### Python Dependencies
+### Satellite Tracking Mathematics
 
-**Core Libraries:**
-- **Flask** (3.0.0): Web framework for WiFi portal
-- **Skyfield** (1.48): Astronomical calculations for ISS tracking
-- **Requests** (2.31.0): HTTP client for geolocation and TLE downloads
-- **pigpio** (1.78): GPIO control library for servo
-- **gpiozero** (2.0.1): LED control library
+#### Two-Line Element (TLE) Format
 
-**Installation:**
-```bash
-pip install flask==3.0.0 skyfield==1.48 requests==2.31.0 pigpio==1.78 gpiozero==2.0.1
-```
+TLE files contain orbital parameters:
 
-### ISS Orbital Mechanics
-
-**Two-Line Element (TLE) Format:**
 ```
 ISS (ZARYA)
-1 25544U 98067A   25360.54166667  .00012345  00000-0  67890-3 0  9999
-2 25544  51.6400 123.4567 0001234  12.3456  45.6789 15.54123456789012
+1 25544U 98067A   25005.12345678  .00002182  00000-0  48726-4 0  9990
+2 25544  51.6416 123.4567 0003456  34.5678 325.5678 15.51234567890123
 ```
 
-**Key Parameters:**
-- **Inclination:** ~51.64 degrees (determines ground track)
-- **Eccentricity:** ~0.0001 (nearly circular orbit)
-- **Period:** ~90 minutes per orbit
-- **Altitude:** ~400-420 km above Earth
+**Line 1:**
+- Satellite number (25544)
+- Epoch (year and day)
+- Drag coefficient
+- Ephemeris type
 
-**Visibility Conditions:**
-1. ISS altitude above horizon > MIN_ELEVATION (15 degrees)
-2. Observer in darkness (after sunset, before sunrise)
-3. ISS in sunlight (illuminated from above)
-4. Clear sky (not checked by PieSS)
+**Line 2:**
+- Inclination (51.6416°)
+- Right ascension (123.4567°)
+- Eccentricity (0.0003456)
+- Argument of perigee (34.5678°)
+- Mean anomaly (325.5678°)
+- Mean motion (15.51 orbits/day)
 
-### Servo Control Theory
+#### Pass Prediction Algorithm
 
-**PWM (Pulse Width Modulation):**
-- Frequency: 50 Hz (20ms period)
-- Pulse width determines position:
-  - 1.0ms (1000us) = 0 degrees
-  - 1.5ms (1500us) = 90 degrees (center)
-  - 2.0ms (2000us) = 180 degrees
+1. **Load TLE data** for ISS
+2. **Set observer location** (lat, lon, elevation)
+3. **Generate time range** (typically 24 hours)
+4. **Calculate position** for each time step
+5. **Find local maxima** in elevation (pass peaks)
+6. **Filter by minimum elevation** (15 degrees)
+7. **Check night-time condition** (between sunset and sunrise)
+8. **Calculate azimuth** for directional LEDs
 
-**PieSS Servo Settings:**
-- UP position: 530us (~-25 degrees from center)
-- DOWN position: 1530us (~95 degrees from center)
-- Total travel: ~120 degrees
+#### Coordinate Systems
 
-**pigpiod Hardware PWM:**
-- Uses hardware PWM peripheral
-- More accurate than software PWM
-- Supports all GPIO pins via pigpio library
-- PieSS uses GPIO 16
+**Horizontal Coordinates (Alt-Az):**
+- Altitude (elevation): 0° to 90° above horizon
+- Azimuth: 0° to 360° clockwise from North
 
-### LED Current Calculations
+**Geographic Coordinates:**
+- Latitude: -90° (South) to +90° (North)
+- Longitude: -180° (West) to +180° (East)
+- Elevation: meters above sea level
 
-**Ohm's Law:** V = I x R
+### GPIO Technical Details
 
-**For Red LED:**
-- GPIO output: 3.3V
-- Forward voltage (Vf): 2.0V
-- Desired current: 15mA
-- Voltage drop across resistor: 3.3V - 2.0V = 1.3V
-- Resistor needed: 1.3V / 0.015A = 86.7Ω
+#### Electrical Specifications
+
+**Raspberry Pi 3B GPIO:**
+- Logic levels: 3.3V (HIGH), 0V (LOW)
+- Maximum current per pin: 16mA
+- Total current all GPIO: 50mA maximum
+- Input impedance: ~50 kΩ pull-up/down
+
+**LED Current Calculations:**
+
+For RED LED on GPIO 22:
+```
+V_gpio = 3.3V
+V_led = 2.0V (red LED forward voltage)
+R = 220 Ohm
+I = (V_gpio - V_led) / R
+I = (3.3 - 2.0) / 220 = 5.9 mA
+```
+
+**Why 220 Ohm Resistors:**
+- Provides safe current (5-6 mA)
+- Well below GPIO maximum (16mA)
+- Provides good LED brightness
+- Standard value, easily available
+- Calculated value: ~215 Ohm
 - Standard value used: 220Ω (more conservative, ~6mA)
 
 **LED Specifications:**
@@ -1922,7 +2303,7 @@ echo 0 > /sys/class/gpio/gpio22/value
 
 ### Version History
 
-**v2.0 (December 2025)**
+**v2.0 (December 2024)**
 
 - Complete rewrite with portable WiFi configuration
 - Progressive LED countdown with acceleration
@@ -1959,4 +2340,4 @@ For issues, questions, or contributions:
 
 **Document End**
 
-*This documentation covers the PieSS implementation located in `/home/piess/PieSS/2025/v2/`. For updates and latest information, refer to the GitHub repository at https://github.com/CPowerMav/PieSS*</parameter>
+*This documentation covers the PieSS implementation located in `/home/piess/PieSS/2025/v2/`. For updates and latest information, refer to the GitHub repository at https://github.com/CPowerMav/PieSS*
