@@ -1,0 +1,19 @@
+# PieSS Python Dependencies
+# 
+# This file lists all Python packages required for PieSS to function.
+# 
+# Installation:
+#   - Automated: This file is automatically created by piess_installer.sh
+#   - Manual: Run "pip install -r requirements.txt" from your virtual environment
+#
+# Usage:
+#   cd ~/PieSS/2025/v2
+#   source venv/bin/activate
+#   pip install -r requirements.txt
+#
+
+flask==3.0.0
+skyfield==1.48
+requests==2.31.0
+pigpio==1.78
+gpiozero==2.0.1

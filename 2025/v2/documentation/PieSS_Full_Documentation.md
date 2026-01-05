@@ -1,8 +1,25 @@
-# PieSS - Complete Technical Documentation
+### LED Status Indicators
 
-**Version:** 2.0  
-**Last Updated:** December 27, 2025  
+PieSS uses LEDs to indicate system status in addition to ISS tracking:
+
+#### Access Point Mode Indicator
+When PieSS cannot connect to WiFi and enters AP configuration mode:
+- **Red 30-minute alert LED blinks** (GPIO 22)
+- Pattern: 0.5 seconds on, 0.5 seconds off
+- Indicates: System needs WiFi configuration
+- Automatically stops when successfully connected to WiFi
+
+#### Network Scanning Animation
+When scanning for WiFi networks from the configuration portal:
+- **Circular LED animation**: North -> East -> South -> West
+- Each LED illuminates for 0.125 seconds
+- Pattern repeats for duration of scan (~8 seconds)
+- Creates a "radar scanning" visual effect
+- Indicates: Active network scan in progress# PieSS - Complete Technical Documentation
+
 **Platform:** Raspberry Pi 3 Model B with Raspberry Pi OS (Trixie)
+
+**Note:** This documentation covers the current PieSS implementation located in the `2025/v2` directory of the repository. All file paths in this document reference this location (`/home/piess/PieSS/2025/v2/`).
 
 ---
 
@@ -61,71 +78,86 @@ When no internet connectivity is available:
 
 ```
 Power On
-    ↓
+    |
 Raspberry Pi Boot
-    ↓
+    |
 NetworkManager starts
-    ↓
+    |
 boot_decider.service starts
-    ↓
+    |
 [Check Internet Connectivity]
-    ↓
-    ├─→ [Has Internet] → Start iss_tracker.service
-    │                    └→ ISS Tracker Mode
-    │
-    └─→ [No Internet] → Configure wlan0 (192.168.4.1)
-                        → Start dnsmasq.service
-                        → Start hostapd.service
-                        → Start wifi_portal.service
-                        └→ WiFi Configuration Mode
+    |
+    +---> [Has Internet] -> Start iss_tracker.service
+    |                        |
+    |                        +-> ISS Tracker Mode
+    |
+    +---> [No Internet] -> Configure wlan0 (192.168.4.1)
+                        -> Start dnsmasq.service
+                        -> Start hostapd.service
+                        -> Start wifi_portal.service
+                        +-> WiFi Configuration Mode
 ```
 
 ### Service Dependencies
 
 ```
 boot_decider.service
-    ├─ Requires: NetworkManager.service
-    └─ Starts one of:
-        ├─ iss_tracker.service
-        │   └─ Requires: pigpiod.service
-        │
-        └─ WiFi Portal Stack
-            ├─ dnsmasq.service
-            ├─ hostapd.service
-            └─ wifi_portal.service
+    +- Requires: NetworkManager.service
+    +- Starts one of:
+        +- iss_tracker.service
+        |   +- Requires: pigpiod.service
+        |
+        +- WiFi Portal Stack
+            +- dnsmasq.service
+            +- hostapd.service
+            +- wifi_portal.service
 ```
 
 ### File Structure
 
 ```
 /home/piess/PieSS/2025/v2/
-├── iss_tracker.py              # Main ISS tracking application
-├── wifi_portal.py              # WiFi configuration web server
-├── boot_decider.sh             # Boot mode decision script
-├── hardware_test.py            # Hardware testing utility
-├── check_passes.py             # Debug utility for pass calculation
-├── venv/                       # Python virtual environment
-├── templates/
-│   ├── wifi_portal.html        # Main configuration page
-│   ├── wifi_result.html        # Connection result page
-│   └── logo.png                # PieSS logo
-├── stations.tle                # Cached ISS orbital data (auto-generated)
-├── de421.bsp                   # Sun ephemeris data (auto-downloaded)
-└── requirements.txt            # Python dependencies
++-- iss_tracker.py              # Main ISS tracking application
++-- wifi_portal.py              # WiFi configuration web server
++-- boot_decider.sh             # Boot mode decision script
++-- hardware_test.py            # Hardware testing utility
++-- check_passes.py             # Debug utility for pass calculation
++-- install_piess.sh            # Automated installation script
++-- requirements.txt            # Python dependencies
++-- venv/                       # Python virtual environment
++-- conf/
+|   +-- hostapd.conf            # WiFi AP configuration
+|   +-- dnsmasq.conf            # DHCP server configuration
+|   +-- sudoers_config.sh       # Sudo permissions helper
++-- services/
+|   +-- boot_decider.service    # Boot orchestrator
+|   +-- iss_tracker.service     # ISS tracker daemon
+|   +-- wifi_portal.service     # WiFi portal daemon
+|   +-- pigpiod.service         # GPIO daemon
++-- templates/
+|   +-- wifi_portal.html        # Main configuration page
+|   +-- wifi_result.html        # Connection result page
+|   +-- logo.png                # PieSS logo
++-- documentation/
+|   +-- PieSS_Full_Documentation.md
+|   +-- PieSS_Full_Documentation.pdf
++-- stations.tle                # Cached ISS orbital data (auto-generated)
++-- de421.bsp                   # Sun ephemeris data (auto-downloaded)
 
 /etc/systemd/system/
-├── boot_decider.service        # Boot orchestrator
-├── iss_tracker.service         # ISS tracker daemon
-├── wifi_portal.service         # WiFi portal daemon
-└── pigpiod.service             # GPIO daemon
++-- boot_decider.service        # Boot orchestrator
++-- iss_tracker.service         # ISS tracker daemon
++-- wifi_portal.service         # WiFi portal daemon
++-- pigpiod.service             # GPIO daemon
 
 /etc/
-├── hostapd/hostapd.conf        # WiFi AP configuration
-├── dnsmasq.conf                # DHCP server configuration
-└── sudoers.d/piess-sudoers     # Sudo permissions for piess user
++-- hostapd/hostapd.conf        # WiFi AP configuration
++-- dnsmasq.conf                # DHCP server configuration
++-- sudoers.d/piess-sudoers     # Sudo permissions for piess user
 
 /var/log/
-└── piess-portal.log            # WiFi portal logs
++-- piess-portal.log            # WiFi portal logs
++-- piess-install.log           # Installation log
 ```
 
 ---
@@ -150,34 +182,34 @@ boot_decider.service
 
 ### GPIO Pin Assignments
 
-| GPIO Pin | BCM Number | Component | Function |
-|----------|------------|-----------|----------|
-| GPIO 5 | BCM 5 | North LED | Direction indicator |
-| GPIO 6 | BCM 6 | East LED | Direction indicator |
-| GPIO 12 | BCM 12 | West LED | Direction indicator |
-| GPIO 13 | BCM 13 | South LED | Direction indicator |
-| GPIO 16 | BCM 16 | Servo PWM | Flag control |
-| GPIO 17 | BCM 17 | Green LED | 5-minute alert |
-| GPIO 22 | BCM 22 | Red LED | 30-minute alert |
-| GPIO 27 | BCM 27 | Yellow LED | 10-minute alert |
+| GPIO Pin | BCM Number | Component | Color | Function |
+|----------|------------|-----------|-------|----------|
+| GPIO 5 | BCM 5 | North LED | Green | Direction indicator |
+| GPIO 6 | BCM 6 | East LED | Red | Direction indicator |
+| GPIO 12 | BCM 12 | West LED | Red | Direction indicator |
+| GPIO 13 | BCM 13 | South LED | Yellow | Direction indicator |
+| GPIO 16 | BCM 16 | Servo PWM | N/A | Flag control |
+| GPIO 17 | BCM 17 | 5-min LED | Green | Alert |
+| GPIO 22 | BCM 22 | 30-min LED | Red | Alert |
+| GPIO 27 | BCM 27 | 10-min LED | Yellow | Alert |
 
 ### Wiring Diagram
 
 ```
 Raspberry Pi 3B
-┌─────────────────────┐
-│  3.3V  (Pin 1)      │───┐
-│  5V    (Pin 2)      │───┼─→ Servo VCC (Red)
-│  GPIO5 (Pin 29)     │───┼─→ North LED → 220Ω → GND
-│  GPIO6 (Pin 31)     │───┼─→ East LED → 220Ω → GND
-│  GPIO12(Pin 32)     │───┼─→ West LED → 220Ω → GND
-│  GPIO13(Pin 33)     │───┼─→ South LED → 220Ω → GND
-│  GPIO16(Pin 36)     │───┼─→ Servo Signal (Orange/Yellow)
-│  GPIO17(Pin 11)     │───┼─→ Green LED → 220Ω → GND
-│  GPIO22(Pin 15)     │───┼─→ Red LED → 220Ω → GND
-│  GPIO27(Pin 13)     │───┼─→ Yellow LED → 220Ω → GND
-│  GND   (Pin 6)      │───┴─→ All GND connections + Servo GND (Brown/Black)
-└─────────────────────┘
++-----------------------+
+|  3.3V  (Pin 1)        |---+
+|  5V    (Pin 2)        |---+-> Servo VCC (Red)
+|  GPIO5 (Pin 29)       |---+-> North LED -> 220 Ohm -> GND
+|  GPIO6 (Pin 31)       |---+-> East LED -> 220 Ohm -> GND
+|  GPIO12(Pin 32)       |---+-> West LED -> 220 Ohm -> GND
+|  GPIO13(Pin 33)       |---+-> South LED -> 220 Ohm -> GND
+|  GPIO16(Pin 36)       |---+-> Servo Signal (Orange/Yellow)
+|  GPIO17(Pin 11)       |---+-> Green LED -> 220 Ohm -> GND
+|  GPIO22(Pin 15)       |---+-> Red LED -> 220 Ohm -> GND
+|  GPIO27(Pin 13)       |---+-> Yellow LED -> 220 Ohm -> GND
+|  GND   (Pin 6)        |---+-> All GND connections + Servo GND (Brown/Black)
++-----------------------+
 ```
 
 ### Servo Configuration
@@ -195,38 +227,102 @@ Raspberry Pi 3B
 
 ### LED Configuration
 
-All LEDs use 220Ω current-limiting resistors:
+All LEDs use 220 Ohm current-limiting resistors:
 - Forward voltage: ~2V (red), ~2.5V (yellow), ~3V (green/white)
 - Forward current: ~15-20mA
 - GPIO output: 3.3V
 
 **Connection Pattern:**
 ```
-GPIO Pin → LED Anode (+) → LED Cathode (-) → 220Ω Resistor → GND
+GPIO Pin -> LED Anode (+) -> LED Cathode (-) -> 220 Ohm Resistor -> GND
 ```
 
 ---
 
 ## Software Installation
 
-### Prerequisites
+### Automated Installation (Recommended)
+
+PieSS includes an automated installation script that handles the entire setup process.
+
+#### Prerequisites
 
 1. **Raspberry Pi OS Installation**
    - Download: Raspberry Pi OS Lite (64-bit recommended)
    - Use Raspberry Pi Imager to flash microSD card
-   - Enable SSH in imager settings
-   - Configure WiFi credentials (for initial setup)
-   - Set hostname: `piess`
-   - Create user: `piess` with your password
+   - **Important settings in Imager:**
+     - Enable SSH
+     - Set username: `piess`
+     - Set password (your choice)
+     - Configure WiFi (optional, for initial setup)
+     - Set hostname: `piess`
 
-2. **Boot Configuration**
+2. **Boot and Connect**
    ```bash
-   sudo raspi-config
-   # Select: 1 System Options → S5 Boot / Auto Login → B1 Console
-   # This sets the Pi to boot to CLI without auto-login
+   # Option 1: SSH using hostname (if mDNS/Bonjour is working)
+   ssh piess@piess.local
+   
+   # Option 2: SSH using IP address
+   # Find the IP address in your router's DHCP client list or connected devices
+   # Then connect using:
+   ssh piess@192.168.1.XXX
+   # Replace XXX with the actual last octet of the IP address
+   
+   # On Windows, you may need to enable mDNS or use the IP address method
+   # On macOS/Linux, .local hostnames typically work by default
    ```
 
-### Step-by-Step Installation
+#### Installation Steps
+
+```bash
+# 1. Clone the repository
+cd ~
+git clone https://github.com/CPowerMav/PieSS.git
+cd PieSS/2025/v2
+
+# 2. Make installer executable
+chmod +x piess_installer.sh
+
+# 3. Run the installer
+sudo ./piess_installer.sh
+
+# 4. Follow prompts and reboot when finished
+```
+
+#### What the Installer Does
+
+The `piess_installer.sh` script automates all installation steps:
+
+1. Updates system packages
+2. Installs dependencies (Python, pigpio, hostapd, dnsmasq)
+3. Verifies project structure and required files
+4. Creates Python virtual environment
+5. Installs Python packages (Flask, Skyfield, etc.)
+6. Configures pigpiod service
+7. Configures WiFi access point (hostapd)
+8. Configures DHCP server (dnsmasq)
+9. Sets up sudo permissions for piess user
+10. Installs systemd services (boot_decider, iss_tracker, wifi_portal)
+11. Creates log files with proper permissions
+12. Sets file permissions and ownership
+13. Enables services for automatic startup
+14. Configures boot to CLI mode
+15. Runs system verification checks
+16. Offers automatic reboot
+
+**Installation time:** Approximately 5-10 minutes depending on internet speed.
+
+**Installation log:** Saved to `/var/log/piess-install.log`
+
+**Script location:** `/home/piess/PieSS/2025/v2/piess_installer.sh`
+
+### Manual Installation
+
+For advanced users or custom setups, follow the detailed manual installation steps below.
+
+### Manual Installation Steps
+
+For manual installation without using the automated script:
 
 #### 1. System Update
 ```bash
@@ -306,7 +402,13 @@ EOF
 
 #### 7. Configure hostapd
 
-Create configuration:
+Use the provided configuration file:
+```bash
+sudo cp ${PIESS_DIR}/conf/hostapd.conf /etc/hostapd/hostapd.conf
+sudo chmod 600 /etc/hostapd/hostapd.conf
+```
+
+Or create manually:
 ```bash
 sudo nano /etc/hostapd/hostapd.conf
 ```
@@ -335,7 +437,12 @@ sudo chmod 600 /etc/hostapd/hostapd.conf
 
 #### 8. Configure dnsmasq
 
-Edit configuration:
+Use the provided configuration file:
+```bash
+sudo cp ${PIESS_DIR}/conf/dnsmasq.conf /etc/dnsmasq.conf
+```
+
+Or edit manually:
 ```bash
 sudo nano /etc/dnsmasq.conf
 ```
@@ -376,6 +483,16 @@ sudo chmod 0440 /etc/sudoers.d/piess-sudoers
 ```
 
 #### 10. Install System Services
+
+Use the provided service files:
+```bash
+sudo cp ${PIESS_DIR}/services/boot_decider.service /etc/systemd/system/
+sudo cp ${PIESS_DIR}/services/iss_tracker.service /etc/systemd/system/
+sudo cp ${PIESS_DIR}/services/wifi_portal.service /etc/systemd/system/
+sudo cp ${PIESS_DIR}/services/pigpiod.service /etc/systemd/system/
+```
+
+Or create manually:
 
 **boot_decider.service:**
 ```bash
@@ -485,7 +602,7 @@ sudo reboot
 
 ### boot_decider.service
 
-**Purpose:** Orchestrates system startup by determining which mode to operate in based on internet connectivity.
+**Purpose:** Orchestrates system startup by determining which mode to operate in based on internet connectivity. Also manages LED status indicators.
 
 **Location:** `/etc/systemd/system/boot_decider.service`
 
@@ -494,8 +611,19 @@ sudo reboot
 **Behavior:**
 1. Waits 20 seconds for NetworkManager to settle
 2. Checks internet connectivity using `nmcli`
-3. If internet available: Starts `iss_tracker.service`
-4. If no internet: Configures AP mode and starts `wifi_portal.service`
+3. If internet available: Starts `iss_tracker.service`, ensures AP LED is off
+4. If no internet: 
+   - Configures AP mode
+   - Starts blinking red LED at West position (AP mode indicator)
+   - Starts `wifi_portal.service`
+
+**LED Status Indicator:**
+- Starts background process that blinks red LED (GPIO 22) at West position
+- Blink rate: 0.5s on, 0.5s off (urgent indication)
+- Process automatically stops when:
+  - WiFi successfully connected
+  - hostapd service stops
+  - System switches to ISS tracker mode
 
 **Logs:**
 ```bash
@@ -824,7 +952,7 @@ def main():
 5. Enter main loop:
    - Download/refresh ISS orbital data
    - Calculate passes for next 24 hours
-   - Filter for night-time passes above 15° elevation
+   - Filter for night-time passes above 15 degrees elevation
    - Find next visible pass
    - Sleep until 32 minutes before pass
    - Begin progressive LED countdown
@@ -850,10 +978,10 @@ def main():
 | Pass active | Directional | Solid, updates every 0.5s |
 
 **Directional LED Logic:**
-- North: 315° - 45° azimuth
-- East: 45° - 135° azimuth
-- South: 135° - 225° azimuth
-- West: 225° - 315° azimuth
+- North: 315 degrees - 45 degrees azimuth
+- East: 45 degrees - 135 degrees azimuth
+- South: 135 degrees - 225 degrees azimuth
+- West: 225 degrees - 315 degrees azimuth
 - Updates every 0.5 seconds during pass
 - Tracks ISS movement across sky in real-time
 
@@ -868,7 +996,7 @@ TLE_REFRESH_HOURS = 12   # TLE data refresh interval
 
 ### wifi_portal.py
 
-**Purpose:** Web-based WiFi configuration interface using Flask.
+**Purpose:** Web-based WiFi configuration interface using Flask. Includes visual feedback via LED animations.
 
 **Port:** 8080
 
@@ -876,11 +1004,22 @@ TLE_REFRESH_HOURS = 12   # TLE data refresh interval
 
 **Key Functions:**
 
-#### 1. Network Scanning
+#### 1. Network Scanning with LED Animation
+```python
+def start_scan_animation():
+    """Start LED animation to indicate WiFi scanning in progress"""
+```
+- Starts circular LED animation (N→E→S→W)
+- Each directional LED illuminates for 0.125 seconds
+- Creates "radar scanning" visual effect
+- Runs in background thread during ~8 second scan
+- Automatically stops when scan completes
+
 ```python
 def scan_networks():
     """Scan for WiFi networks, temporarily stopping AP"""
 ```
+- Triggers LED scanning animation
 - Stops hostapd and dnsmasq
 - Runs `nmcli dev wifi rescan`
 - Parses network list
@@ -894,10 +1033,14 @@ def stop_ap_mode():
 
 def start_ap_mode():
     """Restart AP mode"""
+
+def stop_ap_led_indicator():
+    """Stop the AP mode LED indicator by killing the background process"""
 ```
 - Manages hostapd and dnsmasq services
 - Ensures wlan0 has correct IP (192.168.4.1)
 - Adds 2-second delays for service stabilization
+- Stops blinking LED indicator when connected
 
 #### 3. WiFi Connection
 ```python
@@ -1497,13 +1640,13 @@ ISS (ZARYA)
 ```
 
 **Key Parameters:**
-- **Inclination:** ~51.64° (determines ground track)
+- **Inclination:** ~51.64 degrees (determines ground track)
 - **Eccentricity:** ~0.0001 (nearly circular orbit)
 - **Period:** ~90 minutes per orbit
 - **Altitude:** ~400-420 km above Earth
 
 **Visibility Conditions:**
-1. ISS altitude above horizon > MIN_ELEVATION (15°)
+1. ISS altitude above horizon > MIN_ELEVATION (15 degrees)
 2. Observer in darkness (after sunset, before sunrise)
 3. ISS in sunlight (illuminated from above)
 4. Clear sky (not checked by PieSS)
@@ -1513,14 +1656,14 @@ ISS (ZARYA)
 **PWM (Pulse Width Modulation):**
 - Frequency: 50 Hz (20ms period)
 - Pulse width determines position:
-  - 1.0ms (1000μs) = 0°
-  - 1.5ms (1500μs) = 90° (center)
-  - 2.0ms (2000μs) = 180°
+  - 1.0ms (1000us) = 0 degrees
+  - 1.5ms (1500us) = 90 degrees (center)
+  - 2.0ms (2000us) = 180 degrees
 
 **PieSS Servo Settings:**
-- UP position: 530μs (~-25° from center)
-- DOWN position: 1530μs (~95° from center)
-- Total travel: ~120°
+- UP position: 530us (~-25 degrees from center)
+- DOWN position: 1530us (~95 degrees from center)
+- Total travel: ~120 degrees
 
 **pigpiod Hardware PWM:**
 - Uses hardware PWM peripheral
@@ -1530,7 +1673,7 @@ ISS (ZARYA)
 
 ### LED Current Calculations
 
-**Ohm's Law:** V = I × R
+**Ohm's Law:** V = I x R
 
 **For Red LED:**
 - GPIO output: 3.3V
@@ -1543,16 +1686,14 @@ ISS (ZARYA)
 **LED Specifications:**
 | Color | Vf (typ) | Current | Resistor |
 |-------|----------|---------|----------|
-| Red | 2.0V | 15mA | 220Ω |
-| Yellow | 2.1V | 15mA | 220Ω |
-| Green | 3.0V | 15mA | 220Ω |
-| White/Blue | 3.2V | 15mA | 220Ω |
+| Red | 2.0V | 15mA | 220 Ohm |
+| Yellow | 2.1V | 15mA | 220 Ohm |
+| Green | 3.0V | 15mA | 220 Ohm |
 
-Using 220Ω for all LEDs:
-- Red: (3.3-2.0)/220 = 5.9mA ✓
-- Yellow: (3.3-2.1)/220 = 5.5mA ✓
-- Green: (3.3-3.0)/220 = 1.4mA ✓ (dimmer, but safe)
-- White: (3.3-3.2)/220 = 0.5mA (very dim, may need lower resistor)
+Using 220 Ohm for all LEDs:
+- Red: (3.3-2.0)/220 = 5.9mA (good brightness)
+- Yellow: (3.3-2.1)/220 = 5.5mA (good brightness)
+- Green: (3.3-3.0)/220 = 1.4mA (dimmer, but safe and visible)
 
 ### Network Protocols
 
@@ -1782,14 +1923,18 @@ echo 0 > /sys/class/gpio/gpio22/value
 ### Version History
 
 **v2.0 (December 2025)**
+
 - Complete rewrite with portable WiFi configuration
 - Progressive LED countdown with acceleration
 - Sunrise/sunset based night detection
 - Hardware self-test on startup
+- LED status indicators for AP mode and scanning
+- Automated installation script
 - Improved error handling and logging
 - Complete documentation
 
 **v1.0 (Initial Release)**
+
 - Basic ISS tracking
 - Fixed WiFi configuration
 - Simple LED alerts
@@ -1800,8 +1945,8 @@ echo 0 > /sys/class/gpio/gpio22/value
 ## Support
 
 For issues, questions, or contributions:
-- GitHub: https://github.com/yourusername/PieSS
-- Email: your.email@example.com
+- GitHub: https://github.com/CPowerMav/PieSS
+- Issues: https://github.com/CPowerMav/PieSS/issues
 
 **When reporting issues, please include:**
 1. Output of `sudo journalctl -u iss_tracker -n 100`
@@ -1814,4 +1959,4 @@ For issues, questions, or contributions:
 
 **Document End**
 
-*This documentation covers PieSS v2.0 running on Raspberry Pi 3 Model B with Raspberry Pi OS (Trixie). For updates and latest information, refer to the GitHub repository.*</parameter>
+*This documentation covers the PieSS implementation located in `/home/piess/PieSS/2025/v2/`. For updates and latest information, refer to the GitHub repository at https://github.com/CPowerMav/PieSS*</parameter>
