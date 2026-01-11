@@ -321,7 +321,7 @@ def get_sunrise_sunset(observer_topos: Topos, date_t, ts, ephemeris):
 
 def is_visible_at_night(observer_topos: Topos, pass_time_t, ts, ephemeris) -> bool:
     """
-    Check if a pass occurs during night time (between sunset and sunrise).
+    Check if a pass occurs during night time (sun below horizon).
     
     Args:
         observer_topos: Observer's location
@@ -329,30 +329,14 @@ def is_visible_at_night(observer_topos: Topos, pass_time_t, ts, ephemeris) -> bo
         ts: Skyfield timescale
         ephemeris: Ephemeris data
     """
-    # Get sunrise and sunset for the pass date
-    sunrise, sunset = get_sunrise_sunset(observer_topos, pass_time_t, ts, ephemeris)
+    # Check sun elevation - simpler and more reliable than sunrise/sunset bracketing
+    sun = ephemeris['sun']
+    earth = ephemeris['earth']
+    observer = earth + observer_topos
+    alt, _, _ = observer.at(pass_time_t).observe(sun).apparent().altaz()
     
-    if sunrise is None or sunset is None:
-        # Fallback to elevation check if we can't calculate sunrise/sunset
-        sun = ephemeris['sun']
-        earth = ephemeris['earth']
-        observer = earth + observer_topos
-        alt, _, _ = observer.at(pass_time_t).observe(sun).apparent().altaz()
-        return alt.degrees < -6.0  # Civil twilight
-    
-    pass_datetime = pass_time_t.utc_datetime()
-    sunset_dt = sunset.utc_datetime()
-    sunrise_dt = sunrise.utc_datetime()
-    
-    # Check if pass is between sunset and sunrise
-    if sunset_dt < sunrise_dt:
-        # Normal case: sunset is before sunrise (e.g., sunset at 5pm, sunrise at 7am next day)
-        is_night = pass_datetime >= sunset_dt or pass_datetime <= sunrise_dt
-    else:
-        # Unusual case: crossing date boundary differently
-        is_night = pass_datetime >= sunset_dt and pass_datetime <= sunrise_dt
-    
-    return is_night
+    # Sun must be at least 6 degrees below horizon (civil twilight)
+    return alt.degrees < -6.0
 
 
 # ----------------------------
