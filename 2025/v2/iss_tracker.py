@@ -31,7 +31,7 @@ TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle'
 TLE_REFRESH_HOURS = 12  # Refresh TLE data every 12 hours
 
 # Visibility filters
-MIN_ELEVATION = 15.0     # Minimum degrees above horizon
+MIN_ELEVATION = 10.0     # Minimum degrees above horizon
 
 # Alert timings (seconds before rise)
 ALERT_30M = 1800  # 30 minutes
