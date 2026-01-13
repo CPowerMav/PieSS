@@ -13,7 +13,7 @@ Features:
 
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 import pigpio
@@ -31,7 +31,7 @@ TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle'
 TLE_REFRESH_HOURS = 12  # Refresh TLE data every 12 hours
 
 # Visibility filters
-MIN_ELEVATION = 10.0     # Minimum degrees above horizon
+MIN_ELEVATION = 15.0     # Minimum degrees above horizon
 
 # Alert timings (seconds before rise)
 ALERT_30M = 1800  # 30 minutes
@@ -118,6 +118,30 @@ def update_direction_leds(azimuth: float) -> None:
         led_s.on()
     elif 225 <= azimuth < 315:
         led_w.on()
+
+
+def azimuth_to_direction(azimuth: float) -> str:
+    """Convert azimuth in degrees to compass direction name.
+    
+    Returns direction name (N, NE, E, SE, S, SW, W, NW) and degrees.
+    """
+    directions = [
+        (0, 22.5, "N"),
+        (22.5, 67.5, "NE"),
+        (67.5, 112.5, "E"),
+        (112.5, 157.5, "SE"),
+        (157.5, 202.5, "S"),
+        (202.5, 247.5, "SW"),
+        (247.5, 292.5, "W"),
+        (292.5, 337.5, "NW"),
+        (337.5, 360, "N"),
+    ]
+    
+    for start, end, direction in directions:
+        if start <= azimuth < end:
+            return f"{direction} ({azimuth:.0f}°)"
+    
+    return f"N ({azimuth:.0f}°)"  # Fallback for edge case
 
 
 def test_hardware():
@@ -400,9 +424,25 @@ def main() -> None:
                 duration_sec = (set_dt - rise_dt).total_seconds()
                 seconds_to_rise = (rise_dt - now_ts.utc_datetime()).total_seconds()
 
+                # Calculate start direction (azimuth at rise)
+                difference = iss - observer_location
+                alt, az, _ = difference.at(rise_t).altaz()
+                start_direction = azimuth_to_direction(az.degrees)
+
+                # Convert to EST (UTC-5)
+                est_offset = timezone(timedelta(hours=-5))
+                rise_dt_est = rise_dt.replace(tzinfo=timezone.utc).astimezone(est_offset)
+                
+                # Format time to rise as Xh Ym Zs
+                hours = int(seconds_to_rise // 3600)
+                minutes = int((seconds_to_rise % 3600) // 60)
+                seconds = int(seconds_to_rise % 60)
+
                 print(
-                    f"Next visible pass: rise {rise_dt} UTC, duration {duration_sec:.0f}s, "
-                    f"starts in {seconds_to_rise/60:.1f} minutes"
+                    f"Next visible pass: {rise_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / "
+                    f"{rise_dt_est.strftime('%Y-%m-%d %H:%M:%S')} EST, "
+                    f"duration {duration_sec:.0f}s, start direction {start_direction}, "
+                    f"starts in {hours}h {minutes}m {seconds}s"
                 )
 
                 # Sleep until 32 minutes before rise (gives time for LEDs to start)
